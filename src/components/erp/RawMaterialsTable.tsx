@@ -36,8 +36,8 @@ export function RawMaterialsTable({ rows, readOnly }: Props) {
     toast.success("Row added");
   }
 
-  async function updateField(row: RawMaterial, field: keyof RawMaterial, value: string) {
-    const patch: Record<string, unknown> = {};
+  async function updateField(row: RawMaterial, field: "entry_date" | "name" | "rate" | "quantity", value: string) {
+    const patch: { entry_date?: string; name?: string; rate?: number; quantity?: number } = {};
     if (field === "rate" || field === "quantity") patch[field] = Number(value) || 0;
     else patch[field] = value;
     const before = { [field]: row[field] };
