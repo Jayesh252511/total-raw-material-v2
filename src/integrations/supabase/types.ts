@@ -14,7 +14,126 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          entity: string
+          entity_id: string | null
+          id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          entity: string
+          entity_id?: string | null
+          id?: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          entity?: string
+          entity_id?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      expenses: {
+        Row: {
+          amount: number
+          created_at: string
+          entry_date: string
+          id: string
+          name: string
+          serial_number: number
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          entry_date?: string
+          id?: string
+          name?: string
+          serial_number?: number
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          entry_date?: string
+          id?: string
+          name?: string
+          serial_number?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      raw_materials: {
+        Row: {
+          created_at: string
+          entry_date: string
+          id: string
+          name: string
+          quantity: number
+          rate: number
+          serial_number: number
+          total_amount: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          entry_date?: string
+          id?: string
+          name?: string
+          quantity?: number
+          rate?: number
+          serial_number?: number
+          total_amount?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          entry_date?: string
+          id?: string
+          name?: string
+          quantity?: number
+          rate?: number
+          serial_number?: number
+          total_amount?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      settings: {
+        Row: {
+          high_txn_threshold: number
+          id: number
+          low_money_threshold: number
+          low_stock_threshold: number
+          total_money: number
+          updated_at: string
+        }
+        Insert: {
+          high_txn_threshold?: number
+          id?: number
+          low_money_threshold?: number
+          low_stock_threshold?: number
+          total_money?: number
+          updated_at?: string
+        }
+        Update: {
+          high_txn_threshold?: number
+          id?: number
+          low_money_threshold?: number
+          low_stock_threshold?: number
+          total_money?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
