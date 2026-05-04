@@ -36,8 +36,8 @@ export function ExpensesTable({ rows, readOnly }: Props) {
     toast.success("Row added");
   }
 
-  async function updateField(row: Expense, field: keyof Expense, value: string) {
-    const patch: Record<string, unknown> = {};
+  async function updateField(row: Expense, field: "entry_date" | "name" | "amount", value: string) {
+    const patch: { entry_date?: string; name?: string; amount?: number } = {};
     if (field === "amount") patch[field] = Number(value) || 0;
     else patch[field] = value;
     const before = { [field]: row[field] };
