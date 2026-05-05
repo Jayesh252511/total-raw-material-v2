@@ -111,7 +111,7 @@ function ERPApp() {
             <RawMaterialsTable rows={rawMaterials} readOnly={readOnly} />
             <ExpensesTable rows={expenses} readOnly={readOnly} />
 
-            <div className="flex sm:hidden gap-2">
+            <div className="grid grid-cols-2 gap-2 md:hidden">
               <Button variant="outline" className="flex-1" onClick={() => exportToExcel(rawMaterials, expenses, settings, totalStock)}>
                 <Download className="h-4 w-4 mr-2" /> Excel
               </Button>
