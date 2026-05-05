@@ -3,16 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Expense } from "@/lib/erpStore";
 import { fmtINR, todayStr, isToday, isThisMonth } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
-import { Plus, Trash2, Search } from "lucide-react";
+import { CalendarDays, Plus, Search, Trash2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-type Props = { rows: Expense[]; readOnly: boolean };
+type Props = { rows: Expense[]; readOnly: boolean; onChanged?: () => void | Promise<void> };
 
 const PRESETS = ["Electricity", "Diesel", "Salary", "Repair", "Transport", "Other"];
 
-export function ExpensesTable({ rows, readOnly }: Props) {
+export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
   const [q, setQ] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -33,6 +33,7 @@ export function ExpensesTable({ rows, readOnly }: Props) {
     const { data, error } = await supabase.from("expenses").insert({ entry_date: todayStr() }).select().single();
     if (error) return toast.error(error.message);
     if (data) await logAudit("created", "expense", data.id, { row: data });
+    await onChanged?.();
     toast.success("Row added");
   }
 
@@ -52,6 +53,7 @@ export function ExpensesTable({ rows, readOnly }: Props) {
       }
     }
     await logAudit("updated", "expense", row.id, { field, before, after: { [field]: patch[field] } });
+    await onChanged?.();
   }
 
   async function deleteRow(row: Expense) {
@@ -61,6 +63,7 @@ export function ExpensesTable({ rows, readOnly }: Props) {
     const { data: s } = await supabase.from("settings").select("total_money").eq("id", 1).single();
     if (s) await supabase.from("settings").update({ total_money: Number(s.total_money) + Number(row.amount) }).eq("id", 1);
     await logAudit("deleted", "expense", row.id, { row });
+    await onChanged?.();
     toast.success("Row deleted");
   }
 
