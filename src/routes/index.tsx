@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useERPData, useRole, type Role } from "@/lib/erpStore";
+import { useERPData } from "@/lib/erpStore";
+import { useAuth } from "@/lib/auth";
 import { isToday, isThisMonth } from "@/lib/format";
 import { SummaryCards } from "@/components/erp/SummaryCards";
 import { RawMaterialsTable } from "@/components/erp/RawMaterialsTable";
@@ -9,11 +10,12 @@ import { ReportsPanel } from "@/components/erp/ReportsPanel";
 import { AuditLogPanel } from "@/components/erp/AuditLogPanel";
 import { AlertsBar } from "@/components/erp/AlertsBar";
 import { SettingsDialog } from "@/components/erp/SettingsDialog";
+import { AuthButton } from "@/components/erp/AuthButton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { exportToExcel, exportToPDF } from "@/lib/exporters";
 import { Toaster } from "@/components/ui/sonner";
-import { BarChart3, Download, FileSpreadsheet, FileText, Layers, Eye, ShieldCheck } from "lucide-react";
+import { BarChart3, Download, FileSpreadsheet, FileText, Layers } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: ERPApp,
