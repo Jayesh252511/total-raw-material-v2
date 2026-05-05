@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RawMaterialRouteImport } from './routes/raw-material'
+import { Route as MaintenanceRouteImport } from './routes/maintenance'
 import { Route as IndexRouteImport } from './routes/index'
 
 const RawMaterialRoute = RawMaterialRouteImport.update({
   id: '/raw-material',
   path: '/raw-material',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MaintenanceRoute = MaintenanceRouteImport.update({
+  id: '/maintenance',
+  path: '/maintenance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -25,27 +31,31 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/maintenance': typeof MaintenanceRoute
   '/raw-material': typeof RawMaterialRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/maintenance': typeof MaintenanceRoute
   '/raw-material': typeof RawMaterialRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/maintenance': typeof MaintenanceRoute
   '/raw-material': typeof RawMaterialRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/raw-material'
+  fullPaths: '/' | '/maintenance' | '/raw-material'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/raw-material'
-  id: '__root__' | '/' | '/raw-material'
+  to: '/' | '/maintenance' | '/raw-material'
+  id: '__root__' | '/' | '/maintenance' | '/raw-material'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MaintenanceRoute: typeof MaintenanceRoute
   RawMaterialRoute: typeof RawMaterialRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/raw-material'
       fullPath: '/raw-material'
       preLoaderRoute: typeof RawMaterialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/maintenance': {
+      id: '/maintenance'
+      path: '/maintenance'
+      fullPath: '/maintenance'
+      preLoaderRoute: typeof MaintenanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MaintenanceRoute: MaintenanceRoute,
   RawMaterialRoute: RawMaterialRoute,
 }
 export const routeTree = rootRouteImport
