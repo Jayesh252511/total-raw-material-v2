@@ -167,10 +167,10 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
             ))}
           </tbody>
         </table>
-        <datalist id="expense-presets">
-          {PRESETS.map((p) => <option key={p} value={p} />)}
-        </datalist>
       </div>
+      <datalist id="expense-presets">
+        {PRESETS.map((p) => <option key={p} value={p} />)}
+      </datalist>
     </div>
   );
 }
