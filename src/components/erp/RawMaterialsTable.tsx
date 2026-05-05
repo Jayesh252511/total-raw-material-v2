@@ -86,8 +86,8 @@ export function RawMaterialsTable({ rows, readOnly }: Props) {
           )}
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
+        <table className="w-full text-sm min-w-[720px]">
           <thead className="bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-3 py-2 text-left font-medium w-14">#</th>

@@ -21,15 +21,15 @@ function Card({ s }: { s: Stat }) {
     danger: "text-destructive bg-destructive/10",
   };
   return (
-    <div className="group relative rounded-xl border bg-card p-4 shadow-soft transition-all hover:shadow-card hover:-translate-y-0.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{s.label}</p>
-          <p className="mt-1.5 text-xl font-semibold tracking-tight tabular-nums truncate">{s.value}</p>
-          {s.hint && <p className="text-[11px] text-muted-foreground mt-0.5">{s.hint}</p>}
+    <div className="group relative rounded-xl border bg-card p-3 sm:p-4 shadow-soft transition-all hover:shadow-card hover:-translate-y-0.5">
+      <div className="flex items-start justify-between gap-2 sm:gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wider text-muted-foreground truncate">{s.label}</p>
+          <p className="mt-1.5 text-base sm:text-xl font-semibold tracking-tight tabular-nums truncate">{s.value}</p>
+          {s.hint && <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 truncate">{s.hint}</p>}
         </div>
-        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", toneMap[s.tone ?? "primary"])}>
-          <Icon className="h-4.5 w-4.5" strokeWidth={2.2} />
+        <div className={cn("flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg", toneMap[s.tone ?? "primary"])}>
+          <Icon className="h-4 w-4 sm:h-4.5 sm:w-4.5" strokeWidth={2.2} />
         </div>
       </div>
     </div>
