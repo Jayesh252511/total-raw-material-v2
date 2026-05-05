@@ -1,6 +1,6 @@
 import { AlertTriangle, AlertCircle, TrendingUp } from "lucide-react";
 import type { RawMaterial, Expense, Settings } from "@/lib/erpStore";
-import { fmtINR } from "@/lib/format";
+import { fmtINR, fmtNum } from "@/lib/format";
 
 type Props = { settings: Settings; totalStock: number; rawMaterials: RawMaterial[]; expenses: Expense[] };
 
@@ -10,7 +10,7 @@ export function AlertsBar({ settings, totalStock, rawMaterials, expenses }: Prop
     alerts.push({ tone: "danger", icon: AlertCircle, msg: `Low money: ${fmtINR(settings.total_money)} (below ${fmtINR(settings.low_money_threshold)})` });
   }
   if (totalStock < settings.low_stock_threshold) {
-    alerts.push({ tone: "warning", icon: AlertTriangle, msg: `Low stock: ${totalStock.toFixed(2)} t (below ${settings.low_stock_threshold} t)` });
+    alerts.push({ tone: "warning", icon: AlertTriangle, msg: `Low stock: ${fmtNum(totalStock, 3)} t (below ${fmtNum(settings.low_stock_threshold, 3)} t)` });
   }
   const recent = [...rawMaterials.map((r) => Number(r.total_amount)), ...expenses.map((e) => Number(e.amount))];
   const high = recent.filter((v) => v >= settings.high_txn_threshold);
