@@ -69,16 +69,16 @@ function ERPApp() {
               <p className="text-[11px] text-muted-foreground leading-tight">Inventory · Expenses · Analytics</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <RoleSwitch role={role} setRole={setRole} />
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <AuthButton />
             <SettingsDialog settings={settings} disabled={readOnly} />
-            <Button variant="outline" size="sm" onClick={() => exportToExcel(rawMaterials, expenses, settings, totalStock)} className="h-8 hidden sm:inline-flex">
+            <Button variant="outline" size="sm" onClick={() => exportToExcel(rawMaterials, expenses, settings, totalStock)} className="h-8 hidden md:inline-flex">
               <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" /> Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={() => exportToPDF(rawMaterials, expenses, settings, totalStock)} className="h-8 hidden sm:inline-flex">
+            <Button variant="outline" size="sm" onClick={() => exportToPDF(rawMaterials, expenses, settings, totalStock)} className="h-8 hidden md:inline-flex">
               <FileText className="h-3.5 w-3.5 mr-1.5" /> PDF
             </Button>
-            <Button size="sm" onClick={() => setTab("reports")} className="h-8">
+            <Button size="sm" onClick={() => setTab("reports")} className="h-8 hidden sm:inline-flex">
               <BarChart3 className="h-3.5 w-3.5 mr-1.5" /> Reports
             </Button>
           </div>
