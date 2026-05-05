@@ -3,14 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import type { RawMaterial } from "@/lib/erpStore";
 import { fmtINR, fmtNum, todayStr, isToday, isThisMonth } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
-import { Plus, Trash2, Search } from "lucide-react";
+import { CalendarDays, Plus, Search, Trash2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-type Props = { rows: RawMaterial[]; readOnly: boolean };
+type Props = { rows: RawMaterial[]; readOnly: boolean; onChanged?: () => void | Promise<void> };
 
-export function RawMaterialsTable({ rows, readOnly }: Props) {
+export function RawMaterialsTable({ rows, readOnly, onChanged }: Props) {
   const [q, setQ] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -33,6 +33,7 @@ export function RawMaterialsTable({ rows, readOnly }: Props) {
     const { data, error } = await supabase.from("raw_materials").insert({ entry_date: todayStr() }).select().single();
     if (error) return toast.error(error.message);
     if (data) await logAudit("created", "raw_material", data.id, { row: data });
+    await onChanged?.();
     toast.success("Row added");
   }
 
@@ -46,14 +47,15 @@ export function RawMaterialsTable({ rows, readOnly }: Props) {
 
     // Money deduction logic — recompute delta only when rate/quantity changes
     if (field === "rate" || field === "quantity") {
-      const newTotal = (field === "rate" ? Number(value) : row.rate) * (field === "quantity" ? Number(value) : row.quantity);
-      const delta = newTotal - row.total_amount;
+      const newTotal = (field === "rate" ? Number(value) : Number(row.rate)) * (field === "quantity" ? Number(value) : Number(row.quantity));
+      const delta = newTotal - Number(row.total_amount || 0);
       if (delta !== 0) {
         const { data: s } = await supabase.from("settings").select("total_money").eq("id", 1).single();
         if (s) await supabase.from("settings").update({ total_money: Number(s.total_money) - delta }).eq("id", 1);
       }
     }
     await logAudit("updated", "raw_material", row.id, { field, before, after: { [field]: patch[field] } });
+    await onChanged?.();
   }
 
   async function deleteRow(row: RawMaterial) {
@@ -64,29 +66,81 @@ export function RawMaterialsTable({ rows, readOnly }: Props) {
     const { data: s } = await supabase.from("settings").select("total_money").eq("id", 1).single();
     if (s) await supabase.from("settings").update({ total_money: Number(s.total_money) + Number(row.total_amount) }).eq("id", 1);
     await logAudit("deleted", "raw_material", row.id, { row });
+    await onChanged?.();
     toast.success("Row deleted");
   }
 
   return (
     <div className="rounded-xl border bg-card shadow-soft overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+      <div className="flex flex-col gap-3 border-b px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h3 className="font-semibold text-sm">Raw Material Sheet</h3>
           <p className="text-xs text-muted-foreground">Today: {fmtINR(todayTot)} · {fmtNum(todayTons, 3)} t · Month: {fmtINR(monthTot)} · {fmtNum(monthTons, 3)} t</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
+          <div className="relative col-span-2 sm:col-span-1">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name..." className="h-8 w-44 pl-7 text-xs" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name..." className="h-10 sm:h-8 sm:w-44 pl-7 text-sm sm:text-xs" />
           </div>
-          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8 w-36 text-xs" />
-          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8 w-36 text-xs" />
+          <label className="space-y-1">
+            <span className="text-[10px] font-medium uppercase text-muted-foreground">From</span>
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 sm:h-8 sm:w-36 text-sm sm:text-xs" />
+          </label>
+          <label className="space-y-1">
+            <span className="text-[10px] font-medium uppercase text-muted-foreground">To</span>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 sm:h-8 sm:w-36 text-sm sm:text-xs" />
+          </label>
+          {(q || from || to) && (
+            <Button variant="outline" size="sm" onClick={() => { setQ(""); setFrom(""); setTo(""); }} className="h-10 sm:h-8">
+              <X className="h-3.5 w-3.5" /> Clear
+            </Button>
+          )}
           {!readOnly && (
-            <Button size="sm" onClick={addRow} className="h-8"><Plus className="h-3.5 w-3.5 mr-1" />Add Row</Button>
+            <Button size="sm" onClick={addRow} className="h-10 sm:h-8 col-span-2 sm:col-span-1"><Plus className="h-3.5 w-3.5 mr-1" />Add Row</Button>
           )}
         </div>
       </div>
-      <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
+      <div className="space-y-2 p-3 md:hidden">
+        {filtered.length === 0 && <p className="text-center py-8 text-muted-foreground text-sm">No entries yet. Tap Add Row to start.</p>}
+        {filtered.map((r) => (
+          <div key={r.id} className="rounded-lg border bg-background p-3 shadow-soft">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-muted-foreground">#{r.serial_number}</span>
+              {!readOnly && (
+                <button onClick={() => deleteRow(r)} className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="col-span-2 space-y-1">
+                <span className="text-[10px] font-medium uppercase text-muted-foreground">Date</span>
+                <div className="relative">
+                  <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input disabled={readOnly} type="date" defaultValue={r.entry_date} onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input pl-8" />
+                </div>
+              </label>
+              <label className="col-span-2 space-y-1">
+                <span className="text-[10px] font-medium uppercase text-muted-foreground">Name</span>
+                <input disabled={readOnly} defaultValue={r.name} placeholder="Client / supplier" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] font-medium uppercase text-muted-foreground">Rate ₹/t</span>
+                <input disabled={readOnly} type="number" step="0.01" defaultValue={r.rate} onBlur={(e) => Number(e.target.value) !== Number(r.rate) && updateField(r, "rate", e.target.value)} className="cell-input text-right tabular-nums" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] font-medium uppercase text-muted-foreground">Qty t</span>
+                <input disabled={readOnly} type="number" step="0.001" defaultValue={r.quantity} onBlur={(e) => Number(e.target.value) !== Number(r.quantity) && updateField(r, "quantity", e.target.value)} className="cell-input text-right tabular-nums" />
+              </label>
+              <div className="col-span-2 flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
+                <span className="text-xs text-muted-foreground">Total</span>
+                <span className="font-semibold tabular-nums">{fmtINR(Number(r.total_amount))}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto -webkit-overflow-scrolling-touch md:block">
         <table className="w-full text-sm min-w-[720px]">
           <thead className="bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
             <tr>

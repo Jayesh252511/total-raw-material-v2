@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import { toast } from "sonner";
 export function SettingsDialog({ settings, disabled }: { settings: Settings; disabled: boolean }) {
   const [open, setOpen] = useState(false);
   const [money, setMoney] = useState(String(settings.total_money));
+  const [stock, setStock] = useState(String(settings.stock_adjustment));
   const [lowM, setLowM] = useState(String(settings.low_money_threshold));
   const [lowS, setLowS] = useState(String(settings.low_stock_threshold));
   const [highT, setHighT] = useState(String(settings.high_txn_threshold));
@@ -20,6 +21,7 @@ export function SettingsDialog({ settings, disabled }: { settings: Settings; dis
     const before = { ...settings };
     const after = {
       total_money: Number(money) || 0,
+      stock_adjustment: Number(stock) || 0,
       low_money_threshold: Number(lowM) || 0,
       low_stock_threshold: Number(lowS) || 0,
       high_txn_threshold: Number(highT) || 0,
@@ -36,6 +38,7 @@ export function SettingsDialog({ settings, disabled }: { settings: Settings; dis
       setOpen(o);
       if (o) {
         setMoney(String(settings.total_money));
+        setStock(String(settings.stock_adjustment));
         setLowM(String(settings.low_money_threshold));
         setLowS(String(settings.low_stock_threshold));
         setHighT(String(settings.high_txn_threshold));
@@ -49,14 +52,22 @@ export function SettingsDialog({ settings, disabled }: { settings: Settings; dis
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Settings & Thresholds</DialogTitle>
+          <DialogDescription>Set money, stock correction, and alert limits for the ERP dashboard.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
+          <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label className="text-xs">Total Money Available (₹)</Label>
             <Input type="number" step="0.01" value={money} onChange={(e) => setMoney(e.target.value)} />
             <p className="text-[11px] text-muted-foreground mt-1">Set the cash balance. Auto-deducted on entries.</p>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div>
+            <Label className="text-xs">Stock Adjustment (t)</Label>
+            <Input type="number" step="0.001" value={stock} onChange={(e) => setStock(e.target.value)} />
+            <p className="text-[11px] text-muted-foreground mt-1">Use negative tons for stock used or positive tons for correction.</p>
+          </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
             <div>
               <Label className="text-xs">Low Money Alert (₹)</Label>
               <Input type="number" value={lowM} onChange={(e) => setLowM(e.target.value)} />

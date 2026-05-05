@@ -19,25 +19,31 @@ export type Database = {
           action: string
           created_at: string
           details: Json | null
+          device_info: string | null
           entity: string
           entity_id: string | null
           id: string
+          location_info: string | null
         }
         Insert: {
           action: string
           created_at?: string
           details?: Json | null
+          device_info?: string | null
           entity: string
           entity_id?: string | null
           id?: string
+          location_info?: string | null
         }
         Update: {
           action?: string
           created_at?: string
           details?: Json | null
+          device_info?: string | null
           entity?: string
           entity_id?: string | null
           id?: string
+          location_info?: string | null
         }
         Relationships: []
       }
@@ -113,6 +119,7 @@ export type Database = {
           id: number
           low_money_threshold: number
           low_stock_threshold: number
+          stock_adjustment: number
           total_money: number
           updated_at: string
         }
@@ -121,6 +128,7 @@ export type Database = {
           id?: number
           low_money_threshold?: number
           low_stock_threshold?: number
+          stock_adjustment?: number
           total_money?: number
           updated_at?: string
         }
@@ -129,6 +137,7 @@ export type Database = {
           id?: number
           low_money_threshold?: number
           low_stock_threshold?: number
+          stock_adjustment?: number
           total_money?: number
           updated_at?: string
         }

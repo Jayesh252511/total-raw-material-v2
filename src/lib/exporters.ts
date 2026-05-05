@@ -12,6 +12,7 @@ export function exportToExcel(rm: RawMaterial[], ex: Expense[], settings: Settin
     [""],
     ["Total Money Available", Number(settings.total_money)],
     ["Total Stock (tons)", totalStock],
+    ["Stock Adjustment (tons)", Number(settings.stock_adjustment)],
     ["Total Raw Material Entries", rm.length],
     ["Total Expense Entries", ex.length],
     ["Total Raw Material Spend", rm.reduce((s, r) => s + Number(r.total_amount), 0)],
@@ -63,6 +64,7 @@ export function exportToPDF(rm: RawMaterial[], ex: Expense[], settings: Settings
     body: [
       ["Total Money Available", fmtINR(Number(settings.total_money))],
       ["Total Stock", `${totalStock.toFixed(3)} tons`],
+      ["Stock Adjustment", `${Number(settings.stock_adjustment).toFixed(3)} tons`],
       ["Raw Material Entries", String(rm.length)],
       ["Expense Entries", String(ex.length)],
       ["Total RM Spend", fmtINR(rm.reduce((s, r) => s + Number(r.total_amount), 0))],

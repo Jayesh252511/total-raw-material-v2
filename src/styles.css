@@ -173,5 +173,15 @@
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
+  input[type="date"] {
+    color-scheme: light;
+  }
+  @media (max-width: 767px) {
+    .cell-input {
+      min-height: 42px;
+      border: 1px solid var(--color-input);
+      background-color: var(--color-background);
+    }
+  }
 }
 

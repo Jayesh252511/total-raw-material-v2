@@ -1,5 +1,5 @@
 import type { AuditLog } from "@/lib/erpStore";
-import { History, Plus, Pencil, Trash2, Settings as SettingsIcon } from "lucide-react";
+import { History, MapPin, MonitorSmartphone, Plus, Pencil, Trash2, Settings as SettingsIcon } from "lucide-react";
 
 const iconMap = {
   created: { icon: Plus, cls: "text-success bg-success/10" },
@@ -35,6 +35,14 @@ export function AuditLogPanel({ logs }: { logs: AuditLog[] }) {
                   )}
                 </p>
                 <p className="text-[11px] text-muted-foreground tabular-nums">{new Date(log.created_at).toLocaleString("en-IN")}</p>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                  {log.device_info && (
+                    <span className="inline-flex items-center gap-1"><MonitorSmartphone className="h-3 w-3" />{log.device_info}</span>
+                  )}
+                  {log.location_info && (
+                    <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{log.location_info}</span>
+                  )}
+                </div>
               </div>
             </div>
           );

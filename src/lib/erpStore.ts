@@ -21,6 +21,7 @@ export type Expense = {
 
 export type Settings = {
   total_money: number;
+  stock_adjustment: number;
   low_money_threshold: number;
   low_stock_threshold: number;
   high_txn_threshold: number;
@@ -32,6 +33,8 @@ export type AuditLog = {
   entity: string;
   entity_id: string | null;
   details: Record<string, unknown> | null;
+  device_info: string | null;
+  location_info: string | null;
   created_at: string;
 };
 
@@ -54,6 +57,7 @@ export function useERPData() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [settings, setSettings] = useState<Settings>({
     total_money: 0,
+    stock_adjustment: 0,
     low_money_threshold: 10000,
     low_stock_threshold: 5,
     high_txn_threshold: 50000,
@@ -72,6 +76,7 @@ export function useERPData() {
     if (ex.data) setExpenses(ex.data as Expense[]);
     if (st.data) setSettings({
       total_money: Number(st.data.total_money),
+      stock_adjustment: Number(st.data.stock_adjustment ?? 0),
       low_money_threshold: Number(st.data.low_money_threshold),
       low_stock_threshold: Number(st.data.low_stock_threshold),
       high_txn_threshold: Number(st.data.high_txn_threshold),
@@ -91,8 +96,9 @@ export function useERPData() {
     };
   }, [refresh]);
 
-  // Stock = sum of quantities purchased (raw material in)
-  const totalStock = rawMaterials.reduce((s, r) => s + Number(r.quantity || 0), 0);
+  // Stock = purchased tons plus manual adjustment for corrections/usage.
+  const purchasedStock = rawMaterials.reduce((s, r) => s + Number(r.quantity || 0), 0);
+  const totalStock = purchasedStock + Number(settings.stock_adjustment || 0);
 
-  return { rawMaterials, expenses, settings, auditLogs, loading, refresh, totalStock };
+  return { rawMaterials, expenses, settings, auditLogs, loading, refresh, totalStock, purchasedStock };
 }
