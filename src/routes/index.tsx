@@ -137,16 +137,3 @@ function ERPApp() {
     </div>
   );
 }
-
-function RoleSwitch({ role, setRole }: { role: Role; setRole: (r: Role) => void }) {
-  return (
-    <div className="inline-flex rounded-lg border bg-card p-0.5 text-xs">
-      <button onClick={() => setRole("admin")} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors ${role === "admin" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-        <ShieldCheck className="h-3 w-3" /> Admin
-      </button>
-      <button onClick={() => setRole("viewer")} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors ${role === "viewer" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-        <Eye className="h-3 w-3" /> Viewer
-      </button>
-    </div>
-  );
-}
