@@ -29,9 +29,10 @@ export const Route = createFileRoute("/")({
 
 function ERPApp() {
   const { rawMaterials, expenses, settings, auditLogs, totalStock, loading } = useERPData();
-  const [role, setRole] = useRole();
-  const readOnly = role === "viewer";
+  const { isAdmin } = useAuth();
+  const readOnly = !isAdmin;
   const [tab, setTab] = useState("workspace");
+
 
   const stats = useMemo(() => {
     const todayMaint = expenses.filter((e) => isToday(e.entry_date)).reduce((s, e) => s + Number(e.amount), 0);
