@@ -3,14 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import type { RawMaterial } from "@/lib/erpStore";
 import { fmtINR, fmtNum, todayStr, isToday, isThisMonth } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
-import { Plus, Trash2, Search } from "lucide-react";
+import { CalendarDays, Plus, Search, Trash2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-type Props = { rows: RawMaterial[]; readOnly: boolean };
+type Props = { rows: RawMaterial[]; readOnly: boolean; onChanged?: () => void | Promise<void> };
 
-export function RawMaterialsTable({ rows, readOnly }: Props) {
+export function RawMaterialsTable({ rows, readOnly, onChanged }: Props) {
   const [q, setQ] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -33,6 +33,7 @@ export function RawMaterialsTable({ rows, readOnly }: Props) {
     const { data, error } = await supabase.from("raw_materials").insert({ entry_date: todayStr() }).select().single();
     if (error) return toast.error(error.message);
     if (data) await logAudit("created", "raw_material", data.id, { row: data });
+    await onChanged?.();
     toast.success("Row added");
   }
 
@@ -46,14 +47,15 @@ export function RawMaterialsTable({ rows, readOnly }: Props) {
 
     // Money deduction logic — recompute delta only when rate/quantity changes
     if (field === "rate" || field === "quantity") {
-      const newTotal = (field === "rate" ? Number(value) : row.rate) * (field === "quantity" ? Number(value) : row.quantity);
-      const delta = newTotal - row.total_amount;
+      const newTotal = (field === "rate" ? Number(value) : Number(row.rate)) * (field === "quantity" ? Number(value) : Number(row.quantity));
+      const delta = newTotal - Number(row.total_amount || 0);
       if (delta !== 0) {
         const { data: s } = await supabase.from("settings").select("total_money").eq("id", 1).single();
         if (s) await supabase.from("settings").update({ total_money: Number(s.total_money) - delta }).eq("id", 1);
       }
     }
     await logAudit("updated", "raw_material", row.id, { field, before, after: { [field]: patch[field] } });
+    await onChanged?.();
   }
 
   async function deleteRow(row: RawMaterial) {
@@ -64,6 +66,7 @@ export function RawMaterialsTable({ rows, readOnly }: Props) {
     const { data: s } = await supabase.from("settings").select("total_money").eq("id", 1).single();
     if (s) await supabase.from("settings").update({ total_money: Number(s.total_money) + Number(row.total_amount) }).eq("id", 1);
     await logAudit("deleted", "raw_material", row.id, { row });
+    await onChanged?.();
     toast.success("Row deleted");
   }
 
