@@ -69,24 +69,67 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
 
   return (
     <div className="rounded-xl border bg-card shadow-soft overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+      <div className="flex flex-col gap-3 border-b px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h3 className="font-semibold text-sm">Maintenance / Expense Sheet</h3>
           <p className="text-xs text-muted-foreground">Today: {fmtINR(todayTot)} · Month: {fmtINR(monthTot)}</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
+          <div className="relative col-span-2 sm:col-span-1">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search expense..." className="h-8 w-44 pl-7 text-xs" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search expense..." className="h-10 sm:h-8 sm:w-44 pl-7 text-sm sm:text-xs" />
           </div>
-          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8 w-36 text-xs" />
-          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8 w-36 text-xs" />
+          <label className="space-y-1">
+            <span className="text-[10px] font-medium uppercase text-muted-foreground">From</span>
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 sm:h-8 sm:w-36 text-sm sm:text-xs" />
+          </label>
+          <label className="space-y-1">
+            <span className="text-[10px] font-medium uppercase text-muted-foreground">To</span>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 sm:h-8 sm:w-36 text-sm sm:text-xs" />
+          </label>
+          {(q || from || to) && (
+            <Button variant="outline" size="sm" onClick={() => { setQ(""); setFrom(""); setTo(""); }} className="h-10 sm:h-8">
+              <X className="h-3.5 w-3.5" /> Clear
+            </Button>
+          )}
           {!readOnly && (
-            <Button size="sm" onClick={addRow} className="h-8"><Plus className="h-3.5 w-3.5 mr-1" />Add Row</Button>
+            <Button size="sm" onClick={addRow} className="h-10 sm:h-8 col-span-2 sm:col-span-1"><Plus className="h-3.5 w-3.5 mr-1" />Add Row</Button>
           )}
         </div>
       </div>
-      <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
+      <div className="space-y-2 p-3 md:hidden">
+        {filtered.length === 0 && <p className="text-center py-8 text-muted-foreground text-sm">No expenses yet. Tap Add Row to start.</p>}
+        {filtered.map((r) => (
+          <div key={r.id} className="rounded-lg border bg-background p-3 shadow-soft">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-muted-foreground">#{r.serial_number}</span>
+              {!readOnly && (
+                <button onClick={() => deleteRow(r)} className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <div className="grid gap-2">
+              <label className="space-y-1">
+                <span className="text-[10px] font-medium uppercase text-muted-foreground">Date</span>
+                <div className="relative">
+                  <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input disabled={readOnly} type="date" defaultValue={r.entry_date} onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input pl-8" />
+                </div>
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] font-medium uppercase text-muted-foreground">Expense Name</span>
+                <input disabled={readOnly} list="expense-presets" defaultValue={r.name} placeholder="Electricity, Diesel..." onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] font-medium uppercase text-muted-foreground">Amount</span>
+                <input disabled={readOnly} type="number" step="0.01" defaultValue={r.amount} onBlur={(e) => Number(e.target.value) !== Number(r.amount) && updateField(r, "amount", e.target.value)} className="cell-input text-right tabular-nums" />
+              </label>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto -webkit-overflow-scrolling-touch md:block">
         <table className="w-full text-sm min-w-[560px]">
           <thead className="bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
             <tr>
