@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SellsRouteImport } from './routes/sells'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as RawMaterialRouteImport } from './routes/raw-material'
 import { Route as MaintenanceRouteImport } from './routes/maintenance'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SellsRoute = SellsRouteImport.update({
+  id: '/sells',
+  path: '/sells',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/maintenance': typeof MaintenanceRoute
   '/raw-material': typeof RawMaterialRoute
   '/reports': typeof ReportsRoute
+  '/sells': typeof SellsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/maintenance': typeof MaintenanceRoute
   '/raw-material': typeof RawMaterialRoute
   '/reports': typeof ReportsRoute
+  '/sells': typeof SellsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,12 +70,25 @@ export interface FileRoutesById {
   '/maintenance': typeof MaintenanceRoute
   '/raw-material': typeof RawMaterialRoute
   '/reports': typeof ReportsRoute
+  '/sells': typeof SellsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/history' | '/maintenance' | '/raw-material' | '/reports'
+  fullPaths:
+    | '/'
+    | '/history'
+    | '/maintenance'
+    | '/raw-material'
+    | '/reports'
+    | '/sells'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/history' | '/maintenance' | '/raw-material' | '/reports'
+  to:
+    | '/'
+    | '/history'
+    | '/maintenance'
+    | '/raw-material'
+    | '/reports'
+    | '/sells'
   id:
     | '__root__'
     | '/'
@@ -75,6 +96,7 @@ export interface FileRouteTypes {
     | '/maintenance'
     | '/raw-material'
     | '/reports'
+    | '/sells'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -83,10 +105,18 @@ export interface RootRouteChildren {
   MaintenanceRoute: typeof MaintenanceRoute
   RawMaterialRoute: typeof RawMaterialRoute
   ReportsRoute: typeof ReportsRoute
+  SellsRoute: typeof SellsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sells': {
+      id: '/sells'
+      path: '/sells'
+      fullPath: '/sells'
+      preLoaderRoute: typeof SellsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reports': {
       id: '/reports'
       path: '/reports'
@@ -131,6 +161,7 @@ const rootRouteChildren: RootRouteChildren = {
   MaintenanceRoute: MaintenanceRoute,
   RawMaterialRoute: RawMaterialRoute,
   ReportsRoute: ReportsRoute,
+  SellsRoute: SellsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
