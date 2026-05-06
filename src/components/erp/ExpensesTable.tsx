@@ -44,7 +44,8 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
   async function updateField(row: Expense, field: "entry_date" | "name" | "amount", value: string) {
     const newVal = field === "amount" ? Number(value) || 0 : value;
     const before = { [field]: row[field] };
-    const { error } = await supabase.from("expenses").update({ [field]: newVal }).eq("id", row.id);
+    const patch = { [field]: newVal } as { entry_date?: string; name?: string; amount?: number };
+    const { error } = await supabase.from("expenses").update(patch).eq("id", row.id);
     if (error) return toast.error(error.message);
     if (field === "amount") {
       const delta = (Number(value) || 0) - Number(row.amount);
