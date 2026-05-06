@@ -22,7 +22,7 @@ async function getLocationInfo() {
 
 export async function logAudit(
   action: "created" | "updated" | "deleted" | "settings_changed",
-  entity: "raw_material" | "expense" | "settings",
+  entity: string,
   entityId: string | null,
   details: Record<string, unknown> = {},
 ) {
