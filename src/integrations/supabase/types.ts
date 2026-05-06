@@ -50,6 +50,7 @@ export type Database = {
       expenses: {
         Row: {
           amount: number
+          category: string
           created_at: string
           entry_date: string
           id: string
@@ -59,6 +60,7 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          category?: string
           created_at?: string
           entry_date?: string
           id?: string
@@ -68,6 +70,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          category?: string
           created_at?: string
           entry_date?: string
           id?: string
@@ -83,6 +86,7 @@ export type Database = {
           entry_date: string
           id: string
           name: string
+          payment: number
           quantity: number
           rate: number
           serial_number: number
@@ -94,6 +98,7 @@ export type Database = {
           entry_date?: string
           id?: string
           name?: string
+          payment?: number
           quantity?: number
           rate?: number
           serial_number?: number
@@ -105,6 +110,46 @@ export type Database = {
           entry_date?: string
           id?: string
           name?: string
+          payment?: number
+          quantity?: number
+          rate?: number
+          serial_number?: number
+          total_amount?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sells: {
+        Row: {
+          created_at: string
+          entry_date: string
+          id: string
+          name: string
+          payment: number
+          quantity: number
+          rate: number
+          serial_number: number
+          total_amount: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          entry_date?: string
+          id?: string
+          name?: string
+          payment?: number
+          quantity?: number
+          rate?: number
+          serial_number?: number
+          total_amount?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          entry_date?: string
+          id?: string
+          name?: string
+          payment?: number
           quantity?: number
           rate?: number
           serial_number?: number

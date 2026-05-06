@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { RawMaterialsTable } from "@/components/erp/RawMaterialsTable";
+import { LedgerTable } from "@/components/erp/LedgerTable";
 import { ERPPageFrame } from "@/components/erp/ERPPageFrame";
 
 export const Route = createFileRoute("/raw-material")({
@@ -7,7 +7,7 @@ export const Route = createFileRoute("/raw-material")({
   head: () => ({
     meta: [
       { title: "Raw Material Sheet — Ledger ERP" },
-      { name: "description", content: "Mobile-friendly raw material sheet for stock in tons, rates, totals, and live updates." },
+      { name: "description", content: "Raw material purchases. Stock added, money deducted by payment." },
     ],
   }),
 });
@@ -15,7 +15,7 @@ export const Route = createFileRoute("/raw-material")({
 function RawMaterialPage() {
   return (
     <ERPPageFrame showSummary={false}>
-      {({ rawMaterials, readOnly, refresh }) => <RawMaterialsTable rows={rawMaterials} readOnly={readOnly} onChanged={refresh} />}
+      {({ rawMaterials, readOnly, refresh }) => <LedgerTable mode="purchase" rows={rawMaterials} readOnly={readOnly} onChanged={refresh} />}
     </ERPPageFrame>
   );
 }

@@ -9,7 +9,12 @@ export type RawMaterial = {
   rate: number;
   quantity: number;
   total_amount: number;
+  payment: number;
 };
+
+export type Sell = RawMaterial;
+
+export type ExpenseCategory = "petrol_diesel" | "operator" | "other";
 
 export type Expense = {
   id: string;
@@ -17,6 +22,7 @@ export type Expense = {
   entry_date: string;
   name: string;
   amount: number;
+  category: ExpenseCategory;
 };
 
 export type Settings = {
@@ -54,6 +60,7 @@ export function useRole(): [Role, (r: Role) => void] {
 
 export function useERPData() {
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
+  const [sells, setSells] = useState<Sell[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [settings, setSettings] = useState<Settings>({
     total_money: 0,
@@ -66,14 +73,16 @@ export function useERPData() {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const [rm, ex, st, al] = await Promise.all([
+    const [rm, sl, ex, st, al] = await Promise.all([
       supabase.from("raw_materials").select("*").order("entry_date", { ascending: false }).order("serial_number", { ascending: false }),
+      (supabase.from("sells" as never) as never as ReturnType<typeof supabase.from>).select("*").order("entry_date", { ascending: false }).order("serial_number", { ascending: false }),
       supabase.from("expenses").select("*").order("entry_date", { ascending: false }).order("serial_number", { ascending: false }),
       supabase.from("settings").select("*").eq("id", 1).maybeSingle(),
       supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(200),
     ]);
-    if (rm.data) setRawMaterials(rm.data as RawMaterial[]);
-    if (ex.data) setExpenses(ex.data as Expense[]);
+    if (rm.data) setRawMaterials(rm.data as unknown as RawMaterial[]);
+    if (sl.data) setSells(sl.data as unknown as Sell[]);
+    if (ex.data) setExpenses(ex.data as unknown as Expense[]);
     if (st.data) setSettings({
       total_money: Number(st.data.total_money),
       stock_adjustment: Number(st.data.stock_adjustment ?? 0),
@@ -96,9 +105,9 @@ export function useERPData() {
     };
   }, [refresh]);
 
-  // Stock = purchased tons plus manual adjustment for corrections/usage.
   const purchasedStock = rawMaterials.reduce((s, r) => s + Number(r.quantity || 0), 0);
-  const totalStock = purchasedStock + Number(settings.stock_adjustment || 0);
+  const soldStock = sells.reduce((s, r) => s + Number(r.quantity || 0), 0);
+  const totalStock = purchasedStock - soldStock + Number(settings.stock_adjustment || 0);
 
-  return { rawMaterials, expenses, settings, auditLogs, loading, refresh, totalStock, purchasedStock };
+  return { rawMaterials, sells, expenses, settings, auditLogs, loading, refresh, totalStock, purchasedStock, soldStock };
 }
