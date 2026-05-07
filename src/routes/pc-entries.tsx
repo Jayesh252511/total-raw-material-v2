@@ -1,10 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { externalDb } from "@/integrations/external-db/client";
 import { ERPPageFrame } from "@/components/erp/ERPPageFrame";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
 import { fmtINR, fmtNum } from "@/lib/format";
 
 export const Route = createFileRoute("/pc-entries")({
