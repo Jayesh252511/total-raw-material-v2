@@ -14,7 +14,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 type Mode = "purchase" | "sell";
-type Props = { rows: RawMaterial[]; readOnly: boolean; mode: Mode; onChanged?: () => void | Promise<void> };
+type Props = { rows: (RawMaterial & { vehicle_number?: string })[]; readOnly: boolean; mode: Mode; onChanged?: () => void | Promise<void> };
 
 // purchase: stock+, money- by payment | sell: stock-, money+ by payment
 export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
