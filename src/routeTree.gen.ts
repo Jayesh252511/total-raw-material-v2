@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SellsRouteImport } from './routes/sells'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as RawMaterialRouteImport } from './routes/raw-material'
+import { Route as PcEntriesRouteImport } from './routes/pc-entries'
 import { Route as MaintenanceRouteImport } from './routes/maintenance'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as IndexRouteImport } from './routes/index'
@@ -29,6 +30,11 @@ const ReportsRoute = ReportsRouteImport.update({
 const RawMaterialRoute = RawMaterialRouteImport.update({
   id: '/raw-material',
   path: '/raw-material',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PcEntriesRoute = PcEntriesRouteImport.update({
+  id: '/pc-entries',
+  path: '/pc-entries',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MaintenanceRoute = MaintenanceRouteImport.update({
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/history': typeof HistoryRoute
   '/maintenance': typeof MaintenanceRoute
+  '/pc-entries': typeof PcEntriesRoute
   '/raw-material': typeof RawMaterialRoute
   '/reports': typeof ReportsRoute
   '/sells': typeof SellsRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/history': typeof HistoryRoute
   '/maintenance': typeof MaintenanceRoute
+  '/pc-entries': typeof PcEntriesRoute
   '/raw-material': typeof RawMaterialRoute
   '/reports': typeof ReportsRoute
   '/sells': typeof SellsRoute
@@ -68,6 +76,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/history': typeof HistoryRoute
   '/maintenance': typeof MaintenanceRoute
+  '/pc-entries': typeof PcEntriesRoute
   '/raw-material': typeof RawMaterialRoute
   '/reports': typeof ReportsRoute
   '/sells': typeof SellsRoute
@@ -78,6 +87,7 @@ export interface FileRouteTypes {
     | '/'
     | '/history'
     | '/maintenance'
+    | '/pc-entries'
     | '/raw-material'
     | '/reports'
     | '/sells'
@@ -86,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/history'
     | '/maintenance'
+    | '/pc-entries'
     | '/raw-material'
     | '/reports'
     | '/sells'
@@ -94,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/history'
     | '/maintenance'
+    | '/pc-entries'
     | '/raw-material'
     | '/reports'
     | '/sells'
@@ -103,6 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HistoryRoute: typeof HistoryRoute
   MaintenanceRoute: typeof MaintenanceRoute
+  PcEntriesRoute: typeof PcEntriesRoute
   RawMaterialRoute: typeof RawMaterialRoute
   ReportsRoute: typeof ReportsRoute
   SellsRoute: typeof SellsRoute
@@ -129,6 +142,13 @@ declare module '@tanstack/react-router' {
       path: '/raw-material'
       fullPath: '/raw-material'
       preLoaderRoute: typeof RawMaterialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pc-entries': {
+      id: '/pc-entries'
+      path: '/pc-entries'
+      fullPath: '/pc-entries'
+      preLoaderRoute: typeof PcEntriesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/maintenance': {
@@ -159,6 +179,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HistoryRoute: HistoryRoute,
   MaintenanceRoute: MaintenanceRoute,
+  PcEntriesRoute: PcEntriesRoute,
   RawMaterialRoute: RawMaterialRoute,
   ReportsRoute: ReportsRoute,
   SellsRoute: SellsRoute,
@@ -166,3 +187,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
