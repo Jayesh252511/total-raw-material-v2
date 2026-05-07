@@ -60,10 +60,21 @@ export function useRole(): [Role, (r: Role) => void] {
   return [role, setRole];
 }
 
+export type PcEntry = {
+  id: string;
+  entry_date: string;
+  pc_no: number;
+  name: string;
+  qty: number;
+  rate: number;
+  payment: number;
+};
+
 export function useERPData() {
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [sells, setSells] = useState<Sell[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [pcEntries, setPcEntries] = useState<PcEntry[]>([]);
   const [settings, setSettings] = useState<Settings>({
     total_money: 0,
     sell_money: 0,
@@ -76,16 +87,18 @@ export function useERPData() {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const [rm, sl, ex, st, al] = await Promise.all([
+    const [rm, sl, ex, st, al, pc] = await Promise.all([
       supabase.from("raw_materials").select("*").order("entry_date", { ascending: false }).order("serial_number", { ascending: false }),
       (supabase.from("sells" as never) as never as ReturnType<typeof supabase.from>).select("*").order("entry_date", { ascending: false }).order("serial_number", { ascending: false }),
       supabase.from("expenses").select("*").order("entry_date", { ascending: false }).order("serial_number", { ascending: false }),
       supabase.from("settings").select("*").eq("id", 1).maybeSingle(),
       supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(200),
+      externalDb.from("entries").select("*").order("entry_date", { ascending: false }).order("pc_no", { ascending: false }),
     ]);
     if (rm.data) setRawMaterials(rm.data as unknown as RawMaterial[]);
     if (sl.data) setSells(sl.data as unknown as Sell[]);
     if (ex.data) setExpenses(ex.data as unknown as Expense[]);
+    if (pc.data) setPcEntries(pc.data as unknown as PcEntry[]);
     if (st.data) setSettings({
       total_money: Number(st.data.total_money),
       sell_money: Number((st.data as { sell_money?: number }).sell_money ?? 0),
@@ -104,14 +117,22 @@ export function useERPData() {
       .channel("erp-changes")
       .on("postgres_changes", { event: "*", schema: "public" }, () => refresh())
       .subscribe();
+    const ext = externalDb
+      .channel("ext-entries-all")
+      .on("postgres_changes", { event: "*", schema: "public", table: "entries" }, () => refresh())
+      .subscribe();
     return () => {
       supabase.removeChannel(ch);
+      externalDb.removeChannel(ext);
     };
   }, [refresh]);
 
-  const purchasedStock = rawMaterials.reduce((s, r) => s + Number(r.quantity || 0), 0);
+  // PC entries drive Raw Material totals: qty adds to stock, amount deducts from money
+  const pcStock = pcEntries.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+  const pcAmount = pcEntries.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0);
   const soldStock = sells.reduce((s, r) => s + Number(r.quantity || 0), 0);
-  const totalStock = purchasedStock - soldStock + Number(settings.stock_adjustment || 0);
+  const totalStock = pcStock - soldStock + Number(settings.stock_adjustment || 0);
+  const effectiveMoney = Number(settings.total_money || 0) - pcAmount;
 
-  return { rawMaterials, sells, expenses, settings, auditLogs, loading, refresh, totalStock, purchasedStock, soldStock };
+  return { rawMaterials, sells, expenses, pcEntries, settings, auditLogs, loading, refresh, totalStock, pcStock, soldStock, pcAmount, effectiveMoney };
 }
