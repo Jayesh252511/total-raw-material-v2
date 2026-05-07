@@ -87,15 +87,10 @@ function PcEntriesMirror() {
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="h-10">
-            <Link to="/raw-material"><ArrowLeft className="h-4 w-4" /> Back</Link>
-          </Button>
-          <div>
-            <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 w-44" />
-            <p className="mt-1 text-xs text-muted-foreground">{formatDDMMYYYY(date)}</p>
-          </div>
+        <div>
+          <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Date</label>
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 w-44" />
+          <p className="mt-1 text-xs text-muted-foreground">{formatDDMMYYYY(date)}</p>
         </div>
         <span className="rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">View only · Live</span>
       </div>
