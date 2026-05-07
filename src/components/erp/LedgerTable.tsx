@@ -224,6 +224,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                 <div>
                   <p className="text-xs text-muted-foreground">#{r.serial_number} · {r.entry_date}</p>
                   <p className="text-sm font-semibold">{r.name || "—"}</p>
+                  {mode === "sell" && r.vehicle_number && <p className="text-[11px] text-muted-foreground font-mono">🚚 {r.vehicle_number}</p>}
                 </div>
                 {!readOnly && (
                   <button onClick={() => deleteRow(r)} className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
