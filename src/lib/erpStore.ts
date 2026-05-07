@@ -27,6 +27,7 @@ export type Expense = {
 
 export type Settings = {
   total_money: number;
+  sell_money: number;
   stock_adjustment: number;
   low_money_threshold: number;
   low_stock_threshold: number;
