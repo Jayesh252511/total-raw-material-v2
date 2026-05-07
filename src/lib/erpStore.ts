@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { externalDb } from "@/integrations/external-db/client";
 
 export type RawMaterial = {
   id: string;
