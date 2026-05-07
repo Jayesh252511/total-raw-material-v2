@@ -179,6 +179,9 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                 <div className="grid gap-3 py-2">
                   <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Date</span><Input type="date" value={form.entry_date} onChange={(e) => setForm({ ...form, entry_date: e.target.value })} /></label>
                   <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Name</span><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Client / supplier" /></label>
+                  {mode === "sell" && (
+                    <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Vehicle Number</span><Input value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} placeholder="e.g. MH12 AB 1234" /></label>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Qty (t)</span><Input type="number" step="0.001" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></label>
                     <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Rate (₹/t)</span><Input type="number" step="0.01" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} /></label>
