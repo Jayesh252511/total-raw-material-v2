@@ -56,7 +56,8 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
     const current = Number((s as Record<string, number>)[moneyCol] || 0);
     // purchase: subtract payment from total_money. sell: add payment to sell_money.
     const next = mode === "purchase" ? current - delta : current + delta;
-    await supabase.from("settings").update({ [moneyCol]: next }).eq("id", 1);
+    const update = mode === "purchase" ? { total_money: next } : { sell_money: next };
+    await supabase.from("settings").update(update).eq("id", 1);
   }
 
   async function addRow() {
