@@ -42,7 +42,7 @@ function ERPDashboard() {
   );
 }
 
-function QuickLink({ to, icon: Icon, title, subtitle }: { to: "/raw-material" | "/sells" | "/maintenance" | "/reports" | "/history"; icon: typeof Boxes; title: string; subtitle: string }) {
+function QuickLink({ to, icon: Icon, title, subtitle }: { to: "/pc-entries" | "/sells" | "/maintenance" | "/reports" | "/history"; icon: typeof Boxes; title: string; subtitle: string }) {
   return (
     <Link to={to} className="group rounded-xl border bg-card p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card">
       <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
