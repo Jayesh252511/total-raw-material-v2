@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Wallet, Package, Receipt, Wrench, Calendar, CalendarDays } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, Package, Receipt, Wrench, Calendar, CalendarDays, ShoppingCart } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { fmtINR, fmtTons } from "@/lib/format";
 import { cn } from "@/lib/utils";
