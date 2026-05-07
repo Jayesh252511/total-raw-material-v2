@@ -20,12 +20,13 @@ export function ERPPageFrame({ children, showSummary = true, showAlerts = true }
   const stats = useMemo(() => {
     const todayMaint = erp.expenses.filter((e) => isToday(e.entry_date)).reduce((s, e) => s + Number(e.amount), 0);
     const monthMaint = erp.expenses.filter((e) => isThisMonth(e.entry_date)).reduce((s, e) => s + Number(e.amount), 0);
-    const todayRM = erp.rawMaterials.filter((r) => isToday(r.entry_date)).reduce((s, r) => s + Number(r.total_amount), 0);
-    const monthRM = erp.rawMaterials.filter((r) => isThisMonth(r.entry_date)).reduce((s, r) => s + Number(r.total_amount), 0);
-    const todayTons = erp.rawMaterials.filter((r) => isToday(r.entry_date)).reduce((s, r) => s + Number(r.quantity), 0);
-    const monthTons = erp.rawMaterials.filter((r) => isThisMonth(r.entry_date)).reduce((s, r) => s + Number(r.quantity), 0);
+    const amt = (r: { qty: number; rate: number }) => (Number(r.qty) || 0) * (Number(r.rate) || 0);
+    const todayRM = erp.pcEntries.filter((r) => isToday(r.entry_date)).reduce((s, r) => s + amt(r), 0);
+    const monthRM = erp.pcEntries.filter((r) => isThisMonth(r.entry_date)).reduce((s, r) => s + amt(r), 0);
+    const todayTons = erp.pcEntries.filter((r) => isToday(r.entry_date)).reduce((s, r) => s + Number(r.qty), 0);
+    const monthTons = erp.pcEntries.filter((r) => isThisMonth(r.entry_date)).reduce((s, r) => s + Number(r.qty), 0);
     return {
-      totalMoney: erp.settings.total_money,
+      totalMoney: erp.effectiveMoney,
       sellMoney: erp.settings.sell_money,
       totalStock: erp.totalStock,
       todayExpense: todayMaint + todayRM,
@@ -35,7 +36,7 @@ export function ERPPageFrame({ children, showSummary = true, showAlerts = true }
       todayMaint,
       monthMaint,
     };
-  }, [erp.rawMaterials, erp.expenses, erp.settings.total_money, erp.totalStock]);
+  }, [erp.pcEntries, erp.expenses, erp.effectiveMoney, erp.settings.sell_money, erp.totalStock]);
 
   return (
     <AppShell settings={erp.settings} readOnly={readOnly} rawMaterials={erp.rawMaterials} expenses={erp.expenses} totalStock={erp.totalStock}>
