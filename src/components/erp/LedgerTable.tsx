@@ -14,7 +14,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 type Mode = "purchase" | "sell";
-type Props = { rows: RawMaterial[]; readOnly: boolean; mode: Mode; onChanged?: () => void | Promise<void> };
+type Props = { rows: (RawMaterial & { vehicle_number?: string })[]; readOnly: boolean; mode: Mode; onChanged?: () => void | Promise<void> };
 
 // purchase: stock+, money- by payment | sell: stock-, money+ by payment
 export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
@@ -43,27 +43,35 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
   const monQty = monRows.reduce((s, r) => s + Number(r.quantity), 0);
 
   // Add row form state
-  const [form, setForm] = useState({ entry_date: todayStr(), name: "", rate: "", quantity: "", payment: "" });
-  function resetForm() { setForm({ entry_date: todayStr(), name: "", rate: "", quantity: "", payment: "" }); }
+  const [form, setForm] = useState({ entry_date: todayStr(), name: "", rate: "", quantity: "", payment: "", vehicle_number: "" });
+  function resetForm() { setForm({ entry_date: todayStr(), name: "", rate: "", quantity: "", payment: "", vehicle_number: "" }); }
+
+  // Money column to update: sells use a separate sell_money pot
+  const moneyCol = mode === "purchase" ? "total_money" : "sell_money";
+
+  async function adjustMoney(delta: number) {
+    if (!delta) return;
+    const { data: s } = await supabase.from("settings").select(moneyCol).eq("id", 1).single();
+    if (!s) return;
+    const current = Number((s as Record<string, number>)[moneyCol] || 0);
+    // purchase: subtract payment from total_money. sell: add payment to sell_money.
+    const next = mode === "purchase" ? current - delta : current + delta;
+    const update = mode === "purchase" ? { total_money: next } : { sell_money: next };
+    await supabase.from("settings").update(update).eq("id", 1);
+  }
 
   async function addRow() {
     const rate = Number(form.rate) || 0;
     const qty = Number(form.quantity) || 0;
     const payment = Number(form.payment) || 0;
     const total = rate * qty;
+    const insertPayload: Record<string, unknown> = { entry_date: form.entry_date, name: form.name, rate, quantity: qty, payment };
+    if (mode === "sell") insertPayload.vehicle_number = form.vehicle_number;
     const { data, error } = await (supabase.from(table as never) as never as ReturnType<typeof supabase.from>)
-      .insert({ entry_date: form.entry_date, name: form.name, rate, quantity: qty, payment })
-      .select().single();
+      .insert(insertPayload).select().single();
     if (error) return toast.error(error.message);
 
-    // Money adjust by payment
-    if (payment) {
-      const { data: s } = await supabase.from("settings").select("total_money").eq("id", 1).single();
-      if (s) {
-        const next = mode === "purchase" ? Number(s.total_money) - payment : Number(s.total_money) + payment;
-        await supabase.from("settings").update({ total_money: next }).eq("id", 1);
-      }
-    }
+    if (payment) await adjustMoney(payment);
     if (data) await logAudit("created", table, (data as { id: string }).id, { row: data, total });
     setAddOpen(false);
     resetForm();
@@ -71,23 +79,17 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
     toast.success("Entry added");
   }
 
-  async function updateField(row: RawMaterial, field: "entry_date" | "name" | "rate" | "quantity" | "payment", value: string) {
+  async function updateField(row: RawMaterial & { vehicle_number?: string }, field: "entry_date" | "name" | "rate" | "quantity" | "payment" | "vehicle_number", value: string) {
     const isNum = field === "rate" || field === "quantity" || field === "payment";
     const newVal = isNum ? Number(value) || 0 : value;
-    const before = { [field]: row[field] };
+    const before = { [field]: (row as Record<string, unknown>)[field] };
     const { error } = await (supabase.from(table as never) as never as ReturnType<typeof supabase.from>)
       .update({ [field]: newVal }).eq("id", row.id);
     if (error) return toast.error(error.message);
 
     if (field === "payment") {
       const delta = (Number(value) || 0) - Number(row.payment || 0);
-      if (delta !== 0) {
-        const { data: s } = await supabase.from("settings").select("total_money").eq("id", 1).single();
-        if (s) {
-          const next = mode === "purchase" ? Number(s.total_money) - delta : Number(s.total_money) + delta;
-          await supabase.from("settings").update({ total_money: next }).eq("id", 1);
-        }
-      }
+      if (delta !== 0) await adjustMoney(delta);
     }
     await logAudit("updated", table, row.id, { field, before, after: { [field]: newVal } });
     await onChanged?.();
@@ -97,13 +99,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
     if (!confirm(`Delete entry #${row.serial_number}?`)) return;
     const { error } = await (supabase.from(table as never) as never as ReturnType<typeof supabase.from>).delete().eq("id", row.id);
     if (error) return toast.error(error.message);
-    if (Number(row.payment)) {
-      const { data: s } = await supabase.from("settings").select("total_money").eq("id", 1).single();
-      if (s) {
-        const next = mode === "purchase" ? Number(s.total_money) + Number(row.payment) : Number(s.total_money) - Number(row.payment);
-        await supabase.from("settings").update({ total_money: next }).eq("id", 1);
-      }
-    }
+    if (Number(row.payment)) await adjustMoney(-Number(row.payment));
     await logAudit("deleted", table, row.id, { row });
     await onChanged?.();
     toast.success("Entry deleted");
@@ -183,6 +179,9 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                 <div className="grid gap-3 py-2">
                   <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Date</span><Input type="date" value={form.entry_date} onChange={(e) => setForm({ ...form, entry_date: e.target.value })} /></label>
                   <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Name</span><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Client / supplier" /></label>
+                  {mode === "sell" && (
+                    <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Vehicle Number</span><Input value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} placeholder="e.g. MH12 AB 1234" /></label>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Qty (t)</span><Input type="number" step="0.001" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></label>
                     <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Rate (₹/t)</span><Input type="number" step="0.01" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} /></label>
@@ -225,6 +224,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                 <div>
                   <p className="text-xs text-muted-foreground">#{r.serial_number} · {r.entry_date}</p>
                   <p className="text-sm font-semibold">{r.name || "—"}</p>
+                  {mode === "sell" && r.vehicle_number && <p className="text-[11px] text-muted-foreground font-mono">🚚 {r.vehicle_number}</p>}
                 </div>
                 {!readOnly && (
                   <button onClick={() => deleteRow(r)} className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
@@ -255,6 +255,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
               <th className="px-3 py-2.5 text-left font-medium w-16">Pc No.</th>
               <th className="px-3 py-2.5 text-left font-medium w-32">Date</th>
               <th className="px-3 py-2.5 text-left font-medium">Name</th>
+              {mode === "sell" && <th className="px-3 py-2.5 text-left font-medium w-36">Vehicle No.</th>}
               <th className="px-3 py-2.5 text-right font-medium w-24">Qty</th>
               <th className="px-3 py-2.5 text-right font-medium w-24">Rate</th>
               <th className="px-3 py-2.5 text-right font-medium w-32">Amount</th>
@@ -272,6 +273,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                   <td className="px-3 py-2 tabular-nums text-muted-foreground">{r.serial_number}</td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="date" defaultValue={r.entry_date} onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input text-primary" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.name} placeholder="Name" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" /></td>
+                  {mode === "sell" && <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.vehicle_number || ""} placeholder="Vehicle no." onBlur={(e) => e.target.value !== (r.vehicle_number || "") && updateField(r, "vehicle_number", e.target.value)} className="cell-input font-mono" /></td>}
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.001" defaultValue={r.quantity} onBlur={(e) => Number(e.target.value) !== Number(r.quantity) && updateField(r, "quantity", e.target.value)} className="cell-input text-right tabular-nums" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.rate} onBlur={(e) => Number(e.target.value) !== Number(r.rate) && updateField(r, "rate", e.target.value)} className="cell-input text-right tabular-nums" /></td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtNum(Number(r.total_amount), 2)}</td>

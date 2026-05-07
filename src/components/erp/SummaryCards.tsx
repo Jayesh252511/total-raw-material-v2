@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Wallet, Package, Receipt, Wrench, Calendar, CalendarDays } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, Package, Receipt, Wrench, Calendar, CalendarDays, ShoppingCart } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { fmtINR, fmtTons } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -38,6 +38,7 @@ function Card({ s }: { s: Stat }) {
 
 type Props = {
   totalMoney: number;
+  sellMoney: number;
   totalStock: number;
   todayExpense: number;
   monthExpense: number;
@@ -50,6 +51,7 @@ type Props = {
 export function SummaryCards(p: Props) {
   const stats: Stat[] = [
     { label: "Total Money", value: fmtINR(p.totalMoney), icon: Wallet, tone: "primary" },
+    { label: "Sell Money", value: fmtINR(p.sellMoney), icon: ShoppingCart, tone: "success" },
     { label: "Total Stock", value: fmtTons(p.totalStock), icon: Package, tone: "info" },
     { label: "Today's Expense", value: fmtINR(p.todayExpense), icon: Receipt, tone: "warning", hint: "Material + Maint." },
     { label: "Monthly Expense", value: fmtINR(p.monthExpense), icon: TrendingDown, tone: "danger" },

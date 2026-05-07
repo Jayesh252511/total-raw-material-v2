@@ -26,6 +26,7 @@ export function ERPPageFrame({ children, showSummary = true, showAlerts = true }
     const monthTons = erp.rawMaterials.filter((r) => isThisMonth(r.entry_date)).reduce((s, r) => s + Number(r.quantity), 0);
     return {
       totalMoney: erp.settings.total_money,
+      sellMoney: erp.settings.sell_money,
       totalStock: erp.totalStock,
       todayExpense: todayMaint + todayRM,
       monthExpense: monthMaint + monthRM,

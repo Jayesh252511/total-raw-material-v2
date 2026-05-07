@@ -131,6 +131,7 @@ export type Database = {
           serial_number: number
           total_amount: number | null
           updated_at: string
+          vehicle_number: string
         }
         Insert: {
           created_at?: string
@@ -143,6 +144,7 @@ export type Database = {
           serial_number?: number
           total_amount?: number | null
           updated_at?: string
+          vehicle_number?: string
         }
         Update: {
           created_at?: string
@@ -155,6 +157,7 @@ export type Database = {
           serial_number?: number
           total_amount?: number | null
           updated_at?: string
+          vehicle_number?: string
         }
         Relationships: []
       }
@@ -164,6 +167,7 @@ export type Database = {
           id: number
           low_money_threshold: number
           low_stock_threshold: number
+          sell_money: number
           stock_adjustment: number
           total_money: number
           updated_at: string
@@ -173,6 +177,7 @@ export type Database = {
           id?: number
           low_money_threshold?: number
           low_stock_threshold?: number
+          sell_money?: number
           stock_adjustment?: number
           total_money?: number
           updated_at?: string
@@ -182,6 +187,7 @@ export type Database = {
           id?: number
           low_money_threshold?: number
           low_stock_threshold?: number
+          sell_money?: number
           stock_adjustment?: number
           total_money?: number
           updated_at?: string
