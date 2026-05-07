@@ -12,7 +12,7 @@ export type RawMaterial = {
   payment: number;
 };
 
-export type Sell = RawMaterial;
+export type Sell = RawMaterial & { vehicle_number: string };
 
 export type ExpenseCategory = "petrol_diesel" | "operator" | "other";
 
