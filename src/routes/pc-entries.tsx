@@ -40,7 +40,7 @@ function formatDDMMYYYY(iso: string) {
 
 function PcEntriesPage() {
   return (
-    <ERPPageFrame showSummary={false} showAlerts={false}>
+    <ERPPageFrame showSummary={true} showAlerts={false}>
       {() => <PcEntriesMirror />}
     </ERPPageFrame>
   );
