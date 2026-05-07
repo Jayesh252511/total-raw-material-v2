@@ -21,7 +21,7 @@ function ERPDashboard() {
       {({ rawMaterials, expenses, settings, auditLogs, totalStock }) => (
         <div className="space-y-4">
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
-            <QuickLink to="/raw-material" icon={Boxes} title="Raw Material" subtitle="Buy stock · money out" />
+            <QuickLink to="/pc-entries" icon={Boxes} title="Raw Material" subtitle="Daily PC entries · money out" />
             <QuickLink to="/sells" icon={ShoppingCart} title="Sells" subtitle="Sell stock · money in" />
             <QuickLink to="/maintenance" icon={ReceiptText} title="Maintenance" subtitle="Petrol · Operator · Other" />
             <QuickLink to="/reports" icon={BarChart3} title="Reports" subtitle="Charts and analytics" />
