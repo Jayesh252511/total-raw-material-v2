@@ -26,7 +26,7 @@ type Props = {
 
 const navItems = [
   { to: "/", label: "Home", icon: Home },
-  { to: "/raw-material", label: "Raw", icon: Boxes },
+  { to: "/pc-entries", label: "Raw", icon: Boxes },
   { to: "/sells", label: "Sells", icon: ShoppingCart },
   { to: "/maintenance", label: "Maint.", icon: ReceiptText },
   { to: "/reports", label: "Reports", icon: BarChart3 },
