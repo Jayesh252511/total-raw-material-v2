@@ -255,6 +255,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
               <th className="px-3 py-2.5 text-left font-medium w-16">Pc No.</th>
               <th className="px-3 py-2.5 text-left font-medium w-32">Date</th>
               <th className="px-3 py-2.5 text-left font-medium">Name</th>
+              {mode === "sell" && <th className="px-3 py-2.5 text-left font-medium w-36">Vehicle No.</th>}
               <th className="px-3 py-2.5 text-right font-medium w-24">Qty</th>
               <th className="px-3 py-2.5 text-right font-medium w-24">Rate</th>
               <th className="px-3 py-2.5 text-right font-medium w-32">Amount</th>
