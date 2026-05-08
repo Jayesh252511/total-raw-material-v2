@@ -41,10 +41,10 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
     toast.success("Row added");
   }
 
-  async function updateField(row: Expense, field: "entry_date" | "name" | "amount", value: string) {
-    const newVal = field === "amount" ? Number(value) || 0 : value;
+  async function updateField(row: Expense, field: "entry_date" | "name" | "amount" | "serial_number", value: string) {
+    const newVal = field === "amount" || field === "serial_number" ? Number(value) || 0 : value;
     const before = { [field]: row[field] };
-    const patch = { [field]: newVal } as { entry_date?: string; name?: string; amount?: number };
+    const patch = { [field]: newVal } as { entry_date?: string; name?: string; amount?: number; serial_number?: number };
     const { error } = await supabase.from("expenses").update(patch).eq("id", row.id);
     if (error) return toast.error(error.message);
     if (field === "amount") {
