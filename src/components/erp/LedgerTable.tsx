@@ -79,8 +79,8 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
     toast.success("Entry added");
   }
 
-  async function updateField(row: RawMaterial & { vehicle_number?: string }, field: "entry_date" | "name" | "rate" | "quantity" | "payment" | "vehicle_number", value: string) {
-    const isNum = field === "rate" || field === "quantity" || field === "payment";
+  async function updateField(row: RawMaterial & { vehicle_number?: string }, field: "entry_date" | "name" | "rate" | "quantity" | "payment" | "vehicle_number" | "serial_number", value: string) {
+    const isNum = field === "rate" || field === "quantity" || field === "payment" || field === "serial_number";
     const newVal = isNum ? Number(value) || 0 : value;
     const before = { [field]: (row as Record<string, unknown>)[field] };
     const { error } = await (supabase.from(table as never) as never as ReturnType<typeof supabase.from>)
@@ -220,10 +220,14 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
           const diff = Number(r.total_amount) - Number(r.payment);
           return (
             <div key={r.id} className="rounded-xl border bg-card p-3 shadow-soft">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">#{r.serial_number} · {r.entry_date}</p>
-                  <p className="text-sm font-semibold">{r.name || "—"}</p>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <span>#</span>
+                    <input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input !h-6 !w-16 !px-1 text-xs tabular-nums" />
+                    <span>· {r.entry_date}</span>
+                  </div>
+                  <p className="text-sm font-semibold mt-0.5">{r.name || "—"}</p>
                   {mode === "sell" && r.vehicle_number && <p className="text-[11px] text-muted-foreground font-mono">🚚 {r.vehicle_number}</p>}
                 </div>
                 {!readOnly && (
@@ -270,7 +274,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
               const diff = Number(r.total_amount) - Number(r.payment);
               return (
                 <tr key={r.id} className="border-t hover:bg-muted/20">
-                  <td className="px-3 py-2 tabular-nums text-muted-foreground">{r.serial_number}</td>
+                  <td className="px-1 py-1"><input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input text-left tabular-nums" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="date" defaultValue={r.entry_date} onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input text-primary" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.name} placeholder="Name" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" /></td>
                   {mode === "sell" && <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.vehicle_number || ""} placeholder="Vehicle no." onBlur={(e) => e.target.value !== (r.vehicle_number || "") && updateField(r, "vehicle_number", e.target.value)} className="cell-input font-mono" /></td>}

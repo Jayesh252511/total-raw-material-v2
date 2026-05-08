@@ -41,10 +41,10 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
     toast.success("Row added");
   }
 
-  async function updateField(row: Expense, field: "entry_date" | "name" | "amount", value: string) {
-    const newVal = field === "amount" ? Number(value) || 0 : value;
+  async function updateField(row: Expense, field: "entry_date" | "name" | "amount" | "serial_number", value: string) {
+    const newVal = field === "amount" || field === "serial_number" ? Number(value) || 0 : value;
     const before = { [field]: row[field] };
-    const patch = { [field]: newVal } as { entry_date?: string; name?: string; amount?: number };
+    const patch = { [field]: newVal } as { entry_date?: string; name?: string; amount?: number; serial_number?: number };
     const { error } = await supabase.from("expenses").update(patch).eq("id", row.id);
     if (error) return toast.error(error.message);
     if (field === "amount") {
@@ -110,7 +110,7 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
           {filtered.map((r) => (
             <div key={r.id} className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">#{r.serial_number}</span>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground"><span>#</span><input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input !h-6 !w-16 !px-1 text-xs tabular-nums" /></div>
                 {!readOnly && <button onClick={() => deleteRow(r)} className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>}
               </div>
               <div className="grid gap-2">
@@ -137,7 +137,7 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
               {filtered.length === 0 && <tr><td colSpan={5} className="text-center py-10 text-muted-foreground text-sm">No entries.</td></tr>}
               {filtered.map((r) => (
                 <tr key={r.id} className="border-t hover:bg-muted/20">
-                  <td className="px-3 py-1 text-muted-foreground tabular-nums">{r.serial_number}</td>
+                  <td className="px-1 py-1"><input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input text-left tabular-nums" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="date" defaultValue={r.entry_date} onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.name} placeholder="Details" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.amount} onBlur={(e) => Number(e.target.value) !== Number(r.amount) && updateField(r, "amount", e.target.value)} className="cell-input text-right tabular-nums" /></td>
