@@ -110,7 +110,7 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
           {filtered.map((r) => (
             <div key={r.id} className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">#{r.serial_number}</span>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground"><span>#</span><input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input !h-6 !w-16 !px-1 text-xs tabular-nums" /></div>
                 {!readOnly && <button onClick={() => deleteRow(r)} className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>}
               </div>
               <div className="grid gap-2">
