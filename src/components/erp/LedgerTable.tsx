@@ -274,7 +274,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
               const diff = Number(r.total_amount) - Number(r.payment);
               return (
                 <tr key={r.id} className="border-t hover:bg-muted/20">
-                  <td className="px-3 py-2 tabular-nums text-muted-foreground">{r.serial_number}</td>
+                  <td className="px-1 py-1"><input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input text-left tabular-nums" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="date" defaultValue={r.entry_date} onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input text-primary" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.name} placeholder="Name" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" /></td>
                   {mode === "sell" && <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.vehicle_number || ""} placeholder="Vehicle no." onBlur={(e) => e.target.value !== (r.vehicle_number || "") && updateField(r, "vehicle_number", e.target.value)} className="cell-input font-mono" /></td>}
