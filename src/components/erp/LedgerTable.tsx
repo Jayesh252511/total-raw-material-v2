@@ -79,8 +79,8 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
     toast.success("Entry added");
   }
 
-  async function updateField(row: RawMaterial & { vehicle_number?: string }, field: "entry_date" | "name" | "rate" | "quantity" | "payment" | "vehicle_number", value: string) {
-    const isNum = field === "rate" || field === "quantity" || field === "payment";
+  async function updateField(row: RawMaterial & { vehicle_number?: string }, field: "entry_date" | "name" | "rate" | "quantity" | "payment" | "vehicle_number" | "serial_number", value: string) {
+    const isNum = field === "rate" || field === "quantity" || field === "payment" || field === "serial_number";
     const newVal = isNum ? Number(value) || 0 : value;
     const before = { [field]: (row as Record<string, unknown>)[field] };
     const { error } = await (supabase.from(table as never) as never as ReturnType<typeof supabase.from>)
