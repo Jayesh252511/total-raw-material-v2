@@ -220,10 +220,14 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
           const diff = Number(r.total_amount) - Number(r.payment);
           return (
             <div key={r.id} className="rounded-xl border bg-card p-3 shadow-soft">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">#{r.serial_number} · {r.entry_date}</p>
-                  <p className="text-sm font-semibold">{r.name || "—"}</p>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <span>#</span>
+                    <input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input !h-6 !w-16 !px-1 text-xs tabular-nums" />
+                    <span>· {r.entry_date}</span>
+                  </div>
+                  <p className="text-sm font-semibold mt-0.5">{r.name || "—"}</p>
                   {mode === "sell" && r.vehicle_number && <p className="text-[11px] text-muted-foreground font-mono">🚚 {r.vehicle_number}</p>}
                 </div>
                 {!readOnly && (
