@@ -137,7 +137,7 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
               {filtered.length === 0 && <tr><td colSpan={5} className="text-center py-10 text-muted-foreground text-sm">No entries.</td></tr>}
               {filtered.map((r) => (
                 <tr key={r.id} className="border-t hover:bg-muted/20">
-                  <td className="px-3 py-1 text-muted-foreground tabular-nums">{r.serial_number}</td>
+                  <td className="px-1 py-1"><input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input text-left tabular-nums" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="date" defaultValue={r.entry_date} onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.name} placeholder="Details" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.amount} onBlur={(e) => Number(e.target.value) !== Number(r.amount) && updateField(r, "amount", e.target.value)} className="cell-input text-right tabular-nums" /></td>
