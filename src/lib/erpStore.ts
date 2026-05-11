@@ -127,12 +127,12 @@ export function useERPData() {
     };
   }, [refresh]);
 
-  // PC entries drive Raw Material totals: qty adds to stock, amount deducts from money
+  // PC entries add stock; money is tracked manually via settings (full audit history)
   const pcStock = pcEntries.reduce((s, r) => s + (Number(r.qty) || 0), 0);
   const pcAmount = pcEntries.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0);
   const soldStock = sells.reduce((s, r) => s + Number(r.quantity || 0), 0);
   const totalStock = pcStock - soldStock + Number(settings.stock_adjustment || 0);
-  const effectiveMoney = Number(settings.total_money || 0) - pcAmount;
+  const effectiveMoney = Number(settings.total_money || 0);
 
   return { rawMaterials, sells, expenses, pcEntries, settings, auditLogs, loading, refresh, totalStock, pcStock, soldStock, pcAmount, effectiveMoney };
 }
