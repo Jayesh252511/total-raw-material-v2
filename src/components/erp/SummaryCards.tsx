@@ -128,6 +128,7 @@ type Props = {
   monthTons: number;
   todayMaint: number;
   monthMaint: number;
+  monthRM: number;
 };
 
 export function SummaryCards(p: Props) {
@@ -137,6 +138,7 @@ export function SummaryCards(p: Props) {
     { label: "Total Money", value: fmtINR(p.totalMoney), icon: Wallet, tone: "primary", hint: "Tap for history", onClick: () => setOpenTotal(true) },
     { label: "Sell Money", value: fmtINR(p.sellMoney), icon: ShoppingCart, tone: "success", hint: "Tap for history", onClick: () => setOpenSell(true) },
     { label: "Total Stock", value: fmtTons(p.totalStock), icon: Package, tone: "info" },
+    { label: "Monthly Raw Material", value: fmtINR(p.monthRM), icon: Package, tone: "info" },
     { label: "Today's Expense", value: fmtINR(p.todayExpense), icon: Receipt, tone: "warning", hint: "Material + Maint." },
     { label: "Monthly Expense", value: fmtINR(p.monthExpense), icon: TrendingDown, tone: "danger" },
     { label: "Today's Tons Used", value: fmtTons(p.todayTons), icon: Calendar, tone: "info" },
