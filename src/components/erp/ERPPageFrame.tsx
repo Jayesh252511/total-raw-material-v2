@@ -35,6 +35,7 @@ export function ERPPageFrame({ children, showSummary = true, showAlerts = true }
       monthTons,
       todayMaint,
       monthMaint,
+      monthRM,
     };
   }, [erp.pcEntries, erp.expenses, erp.effectiveMoney, erp.settings.sell_money, erp.totalStock]);
 
