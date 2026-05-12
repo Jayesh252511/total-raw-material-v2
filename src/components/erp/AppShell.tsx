@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
-import { BarChart3, Boxes, FileSpreadsheet, FileText, Home, Layers, ReceiptText, ShoppingCart, Wallet, Plus } from "lucide-react";
+import { BarChart3, Boxes, FileSpreadsheet, FileText, Home, Layers, Lock, ReceiptText, ShoppingCart, Wallet, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AuthButton } from "@/components/erp/AuthButton";
 import { SettingsDialog } from "@/components/erp/SettingsDialog";
@@ -67,6 +67,42 @@ function AddMoneyDialog({ currentMoney, disabled }: { currentMoney: number; disa
   );
 }
 
+function AddLockMoneyDialog({ currentLock, disabled }: { currentLock: number; disabled: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [amt, setAmt] = useState("");
+  const [note, setNote] = useState("");
+  async function add() {
+    const n = Number(amt) || 0;
+    if (n <= 0) return toast.error("Lock amount can only be added (positive value)");
+    const next = currentLock + n;
+    const { error } = await supabase.from("settings").update({ lock_money: next } as never).eq("id", 1);
+    if (error) return toast.error(error.message);
+    await logAudit("settings_changed", "settings", "1", { added_lock_money: n, note, before: currentLock, after: next });
+    toast.success(`Added ${fmtINR(n)} to Lock Amount`);
+    setAmt(""); setNote(""); setOpen(false);
+  }
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" disabled={disabled} className="h-8 gap-1">
+          <Lock className="h-3.5 w-3.5" /><Plus className="h-3 w-3" /><span className="hidden sm:inline">Lock</span>
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>Add to Lock Amount</DialogTitle></DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-xs text-muted-foreground">Current Lock: <span className="font-semibold">{fmtINR(currentLock)}</span></p>
+          <p className="text-[11px] text-warning">Lock amount is add-only. It can never decrease.</p>
+          <div><Label className="text-xs">Amount (₹)</Label><Input type="number" step="0.01" min="0" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="e.g. 10000" autoFocus /></div>
+          <div><Label className="text-xs">Note (optional)</Label><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Source / reason..." /></div>
+          {amt && <p className="rounded-md bg-muted/40 px-3 py-2 text-sm">New lock: <span className="font-semibold tabular-nums">{fmtINR(currentLock + (Number(amt) || 0))}</span></p>}
+        </div>
+        <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={add}>Add</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function AppShell({ children, settings, readOnly, rawMaterials, expenses, totalStock }: Props) {
   const pathname = useLocation({ select: (s) => s.pathname });
   return (
@@ -96,6 +132,7 @@ export function AppShell({ children, settings, readOnly, rawMaterials, expenses,
           </nav>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <AddMoneyDialog currentMoney={settings.total_money} disabled={readOnly} />
+            <AddLockMoneyDialog currentLock={settings.lock_money} disabled={readOnly} />
             <AuthButton />
             <SettingsDialog settings={settings} disabled={readOnly} />
             <Button variant="outline" size="sm" onClick={() => exportToExcel(rawMaterials, expenses, settings, totalStock)} className="hidden h-8 md:inline-flex">
