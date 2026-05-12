@@ -164,8 +164,10 @@ type Props = {
 
 export function SummaryCards(p: Props) {
   const [openTotal, setOpenTotal] = useState(false);
-  const [openSell, setOpenSell] = useState(false);
   const [openLock, setOpenLock] = useState(false);
+  const stats: Stat[] = [
+    { label: "Total Money", value: fmtINR(p.totalMoney), icon: Wallet, tone: "primary", hint: "Tap for history", onClick: () => setOpenTotal(true) },
+    { label: "Sell Money", value: fmtINR(p.sellMoney), icon: ShoppingCart, tone: "success", hint: "Incl. 5% GST · sum of qty×rate" },
     { label: "Lock Amount", value: fmtINR(p.lockMoney), icon: Lock, tone: "warning", hint: "Add-only · tap for history", onClick: () => setOpenLock(true) },
     { label: "Total Stock", value: fmtTons(p.totalStock), icon: Package, tone: "info" },
     { label: "Yearly Raw Material", value: fmtINR(p.yearRM), icon: Package, tone: "info" },
@@ -176,9 +178,6 @@ export function SummaryCards(p: Props) {
     { label: "Today's Maintenance", value: fmtINR(p.todayMaint), icon: Wrench, tone: "warning" },
     { label: "Yearly Maintenance", value: fmtINR(p.yearMaint), icon: TrendingUp, tone: "success" },
   ];
-  // Suppress unused warning for openSell setter
-  void openSell;
-  void setOpenSell;
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
