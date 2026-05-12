@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { RawMaterial } from "@/lib/erpStore";
-import { fmtINR, fmtNum, todayStr, isToday, isThisMonth } from "@/lib/format";
+import { fmtINR, fmtNum, todayStr, isToday, isThisYear } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
 import { CalendarDays, Plus, Search, Trash2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -25,9 +25,9 @@ export function RawMaterialsTable({ rows, readOnly, onChanged }: Props) {
   }, [rows, q, from, to]);
 
   const todayTot = filtered.filter((r) => isToday(r.entry_date)).reduce((s, r) => s + Number(r.total_amount), 0);
-  const monthTot = filtered.filter((r) => isThisMonth(r.entry_date)).reduce((s, r) => s + Number(r.total_amount), 0);
+  const yearTot = filtered.filter((r) => isThisYear(r.entry_date)).reduce((s, r) => s + Number(r.total_amount), 0);
   const todayTons = filtered.filter((r) => isToday(r.entry_date)).reduce((s, r) => s + Number(r.quantity), 0);
-  const monthTons = filtered.filter((r) => isThisMonth(r.entry_date)).reduce((s, r) => s + Number(r.quantity), 0);
+  const yearTons = filtered.filter((r) => isThisYear(r.entry_date)).reduce((s, r) => s + Number(r.quantity), 0);
 
   async function addRow() {
     const { data, error } = await supabase.from("raw_materials").insert({ entry_date: todayStr() }).select().single();
@@ -75,7 +75,7 @@ export function RawMaterialsTable({ rows, readOnly, onChanged }: Props) {
       <div className="flex flex-col gap-3 border-b px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h3 className="font-semibold text-sm">Raw Material Sheet</h3>
-          <p className="text-xs text-muted-foreground">Today: {fmtINR(todayTot)} · {fmtNum(todayTons, 3)} t · Month: {fmtINR(monthTot)} · {fmtNum(monthTons, 3)} t</p>
+          <p className="text-xs text-muted-foreground">Today: {fmtINR(todayTot)} · {fmtNum(todayTons, 3)} t · Year: {fmtINR(yearTot)} · {fmtNum(yearTons, 3)} t</p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
           <div className="relative col-span-2 sm:col-span-1">

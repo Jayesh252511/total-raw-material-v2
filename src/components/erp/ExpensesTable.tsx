@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Expense, ExpenseCategory } from "@/lib/erpStore";
-import { fmtINR, todayStr, isToday, isThisMonth } from "@/lib/format";
+import { fmtINR, todayStr, isToday, isThisYear } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
 import { Plus, Search, Trash2, X, Fuel, UserCog, Package } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -31,7 +31,7 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
   }), [rows, tab, q, from, to]);
 
   const todayTot = filtered.filter((r) => isToday(r.entry_date)).reduce((s, r) => s + Number(r.amount), 0);
-  const monthTot = filtered.filter((r) => isThisMonth(r.entry_date)).reduce((s, r) => s + Number(r.amount), 0);
+  const yearTot = filtered.filter((r) => isThisYear(r.entry_date)).reduce((s, r) => s + Number(r.amount), 0);
 
   async function addRow() {
     const { data, error } = await supabase.from("expenses").insert({ entry_date: todayStr(), category: tab }).select().single();
@@ -91,7 +91,7 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
         <div className="flex flex-col gap-3 border-b px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="font-semibold text-sm">{CATS.find((c) => c.key === tab)?.label}</h3>
-            <p className="text-xs text-muted-foreground">Today: {fmtINR(todayTot)} · Month: {fmtINR(monthTot)}</p>
+            <p className="text-xs text-muted-foreground">Today: {fmtINR(todayTot)} · Year: {fmtINR(yearTot)}</p>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
             <div className="relative col-span-2 sm:col-span-1">

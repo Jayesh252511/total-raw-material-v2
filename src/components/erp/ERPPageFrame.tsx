@@ -4,7 +4,7 @@ import { AppShell } from "@/components/erp/AppShell";
 import { SummaryCards } from "@/components/erp/SummaryCards";
 import { useAuth } from "@/lib/auth";
 import { useERPData } from "@/lib/erpStore";
-import { isThisMonth, isToday } from "@/lib/format";
+import { isThisYear, isToday, withGst } from "@/lib/format";
 
 type Props = {
   children: (ctx: ReturnType<typeof useERPData> & { readOnly: boolean }) => React.ReactNode;
@@ -19,25 +19,28 @@ export function ERPPageFrame({ children, showSummary = true, showAlerts = true }
 
   const stats = useMemo(() => {
     const todayMaint = erp.expenses.filter((e) => isToday(e.entry_date)).reduce((s, e) => s + Number(e.amount), 0);
-    const monthMaint = erp.expenses.filter((e) => isThisMonth(e.entry_date)).reduce((s, e) => s + Number(e.amount), 0);
+    const yearMaint = erp.expenses.filter((e) => isThisYear(e.entry_date)).reduce((s, e) => s + Number(e.amount), 0);
     const amt = (r: { qty: number; rate: number }) => (Number(r.qty) || 0) * (Number(r.rate) || 0);
     const todayRM = erp.pcEntries.filter((r) => isToday(r.entry_date)).reduce((s, r) => s + amt(r), 0);
-    const monthRM = erp.pcEntries.filter((r) => isThisMonth(r.entry_date)).reduce((s, r) => s + amt(r), 0);
+    const yearRM = erp.pcEntries.filter((r) => isThisYear(r.entry_date)).reduce((s, r) => s + amt(r), 0);
     const todayTons = erp.pcEntries.filter((r) => isToday(r.entry_date)).reduce((s, r) => s + Number(r.qty), 0);
-    const monthTons = erp.pcEntries.filter((r) => isThisMonth(r.entry_date)).reduce((s, r) => s + Number(r.qty), 0);
+    const yearTons = erp.pcEntries.filter((r) => isThisYear(r.entry_date)).reduce((s, r) => s + Number(r.qty), 0);
+    // Sell Money on dashboard = sum of (qty*rate) i.e. amount without gadi bhada, +5% GST
+    const sellMoney = erp.sells.reduce((s, r) => s + Number(r.quantity || 0) * Number(r.rate || 0), 0);
     return {
       totalMoney: erp.effectiveMoney,
-      sellMoney: erp.settings.sell_money,
+      sellMoney: withGst(sellMoney),
+      lockMoney: erp.settings.lock_money,
       totalStock: erp.totalStock,
       todayExpense: todayMaint + todayRM,
-      monthExpense: monthMaint + monthRM,
+      yearExpense: yearMaint + yearRM,
       todayTons,
-      monthTons,
+      yearTons,
       todayMaint,
-      monthMaint,
-      monthRM,
+      yearMaint,
+      yearRM,
     };
-  }, [erp.pcEntries, erp.expenses, erp.effectiveMoney, erp.settings.sell_money, erp.totalStock]);
+  }, [erp.pcEntries, erp.expenses, erp.sells, erp.effectiveMoney, erp.settings.lock_money, erp.totalStock]);
 
   return (
     <AppShell settings={erp.settings} readOnly={readOnly} rawMaterials={erp.rawMaterials} expenses={erp.expenses} totalStock={erp.totalStock}>

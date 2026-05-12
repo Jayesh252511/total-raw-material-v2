@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { TrendingUp, TrendingDown, Wallet, Package, Receipt, Wrench, Calendar, CalendarDays, ShoppingCart } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, Package, Receipt, Wrench, Calendar, CalendarDays, ShoppingCart, Lock } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { fmtINR, fmtTons } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -53,10 +53,11 @@ type MoneyLog = {
   before: number;
   after: number;
   delta: number;
+  note: string | null;
   device_info: string | null;
 };
 
-function MoneyHistoryDialog({ open, onOpenChange, field, title }: { open: boolean; onOpenChange: (o: boolean) => void; field: "total_money" | "sell_money"; title: string }) {
+function MoneyHistoryDialog({ open, onOpenChange, field, title }: { open: boolean; onOpenChange: (o: boolean) => void; field: "total_money" | "sell_money" | "lock_money"; title: string }) {
   const [logs, setLogs] = useState<MoneyLog[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -72,12 +73,40 @@ function MoneyHistoryDialog({ open, onOpenChange, field, title }: { open: boolea
         .limit(500);
       const out: MoneyLog[] = [];
       for (const r of data || []) {
-        const d = (r as { details: { before?: Record<string, number>; after?: Record<string, number> } }).details || {};
-        const before = Number(d.before?.[field] ?? NaN);
-        const after = Number(d.after?.[field] ?? NaN);
-        if (!Number.isFinite(before) || !Number.isFinite(after)) continue;
-        if (before === after) continue;
-        out.push({ id: (r as { id: string }).id, created_at: (r as { created_at: string }).created_at, before, after, delta: after - before, device_info: (r as { device_info: string | null }).device_info });
+        const d = ((r as { details: Record<string, unknown> }).details || {}) as {
+          before?: number | Record<string, number>;
+          after?: number | Record<string, number>;
+          added_money?: number;
+          added_lock_money?: number;
+          field?: string;
+          note?: string;
+        };
+        let before = NaN;
+        let after = NaN;
+        // Case 1: object form (settings_changed before/after = {field: val,...})
+        if (typeof d.before === "object" && d.before && typeof d.after === "object" && d.after) {
+          before = Number((d.before as Record<string, number>)[field] ?? NaN);
+          after = Number((d.after as Record<string, number>)[field] ?? NaN);
+        }
+        // Case 2: simple add money form (before/after = numbers, field implied by added_*)
+        else if (typeof d.before === "number" && typeof d.after === "number") {
+          const isLockEntry = "added_lock_money" in d;
+          const matchesField = (field === "lock_money" && isLockEntry) || (field === "total_money" && !isLockEntry && "added_money" in d);
+          if (matchesField) {
+            before = d.before;
+            after = d.after;
+          }
+        }
+        if (!Number.isFinite(before) || !Number.isFinite(after) || before === after) continue;
+        out.push({
+          id: (r as { id: string }).id,
+          created_at: (r as { created_at: string }).created_at,
+          before,
+          after,
+          delta: after - before,
+          note: d.note ?? null,
+          device_info: (r as { device_info: string | null }).device_info,
+        });
       }
       setLogs(out);
       setLoading(false);
@@ -107,6 +136,7 @@ function MoneyHistoryDialog({ open, onOpenChange, field, title }: { open: boolea
                   <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
                     {fmtINR(l.before)} → {fmtINR(l.after)}
                   </div>
+                  {l.note && <div className="mt-1 text-xs font-medium">📝 {l.note}</div>}
                   {l.device_info && <div className="mt-1 text-[10px] text-muted-foreground truncate">{l.device_info}</div>}
                 </div>
               );
@@ -121,30 +151,32 @@ function MoneyHistoryDialog({ open, onOpenChange, field, title }: { open: boolea
 type Props = {
   totalMoney: number;
   sellMoney: number;
+  lockMoney: number;
   totalStock: number;
   todayExpense: number;
-  monthExpense: number;
+  yearExpense: number;
   todayTons: number;
-  monthTons: number;
+  yearTons: number;
   todayMaint: number;
-  monthMaint: number;
-  monthRM: number;
+  yearMaint: number;
+  yearRM: number;
 };
 
 export function SummaryCards(p: Props) {
   const [openTotal, setOpenTotal] = useState(false);
-  const [openSell, setOpenSell] = useState(false);
+  const [openLock, setOpenLock] = useState(false);
   const stats: Stat[] = [
     { label: "Total Money", value: fmtINR(p.totalMoney), icon: Wallet, tone: "primary", hint: "Tap for history", onClick: () => setOpenTotal(true) },
-    { label: "Sell Money", value: fmtINR(p.sellMoney), icon: ShoppingCart, tone: "success", hint: "Tap for history", onClick: () => setOpenSell(true) },
+    { label: "Sell Money", value: fmtINR(p.sellMoney), icon: ShoppingCart, tone: "success", hint: "Incl. 5% GST · sum of qty×rate" },
+    { label: "Lock Amount", value: fmtINR(p.lockMoney), icon: Lock, tone: "warning", hint: "Add-only · tap for history", onClick: () => setOpenLock(true) },
     { label: "Total Stock", value: fmtTons(p.totalStock), icon: Package, tone: "info" },
-    { label: "Monthly Raw Material", value: fmtINR(p.monthRM), icon: Package, tone: "info" },
+    { label: "Yearly Raw Material", value: fmtINR(p.yearRM), icon: Package, tone: "info" },
     { label: "Today's Expense", value: fmtINR(p.todayExpense), icon: Receipt, tone: "warning", hint: "Material + Maint." },
-    { label: "Monthly Expense", value: fmtINR(p.monthExpense), icon: TrendingDown, tone: "danger" },
+    { label: "Yearly Expense", value: fmtINR(p.yearExpense), icon: TrendingDown, tone: "danger" },
     { label: "Today's Tons Used", value: fmtTons(p.todayTons), icon: Calendar, tone: "info" },
-    { label: "Monthly Tons Used", value: fmtTons(p.monthTons), icon: CalendarDays, tone: "info" },
+    { label: "Yearly Tons Used", value: fmtTons(p.yearTons), icon: CalendarDays, tone: "info" },
     { label: "Today's Maintenance", value: fmtINR(p.todayMaint), icon: Wrench, tone: "warning" },
-    { label: "Monthly Maintenance", value: fmtINR(p.monthMaint), icon: TrendingUp, tone: "success" },
+    { label: "Yearly Maintenance", value: fmtINR(p.yearMaint), icon: TrendingUp, tone: "success" },
   ];
   return (
     <>
@@ -152,7 +184,7 @@ export function SummaryCards(p: Props) {
         {stats.map((s) => <Card key={s.label} s={s} />)}
       </div>
       <MoneyHistoryDialog open={openTotal} onOpenChange={setOpenTotal} field="total_money" title="Total Money — History" />
-      <MoneyHistoryDialog open={openSell} onOpenChange={setOpenSell} field="sell_money" title="Sell Money — History" />
+      <MoneyHistoryDialog open={openLock} onOpenChange={setOpenLock} field="lock_money" title="Lock Amount — History" />
     </>
   );
 }
