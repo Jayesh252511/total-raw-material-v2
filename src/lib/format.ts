@@ -17,3 +17,12 @@ export const isThisMonth = (d: string) => {
   const dt = new Date(d);
   return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
 };
+
+export const isThisYear = (d: string) => {
+  const now = new Date();
+  const dt = new Date(d);
+  return dt.getFullYear() === now.getFullYear();
+};
+
+export const SELL_GST_RATE = 0.05;
+export const withGst = (n: number) => n * (1 + SELL_GST_RATE);

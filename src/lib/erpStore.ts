@@ -13,7 +13,7 @@ export type RawMaterial = {
   payment: number;
 };
 
-export type Sell = RawMaterial & { vehicle_number: string };
+export type Sell = RawMaterial & { vehicle_number: string; gadi_bhada: number };
 
 export type ExpenseCategory = "petrol_diesel" | "operator" | "other";
 
@@ -29,6 +29,7 @@ export type Expense = {
 export type Settings = {
   total_money: number;
   sell_money: number;
+  lock_money: number;
   stock_adjustment: number;
   low_money_threshold: number;
   low_stock_threshold: number;
@@ -78,6 +79,7 @@ export function useERPData() {
   const [settings, setSettings] = useState<Settings>({
     total_money: 0,
     sell_money: 0,
+    lock_money: 0,
     stock_adjustment: 0,
     low_money_threshold: 10000,
     low_stock_threshold: 5,
@@ -102,6 +104,7 @@ export function useERPData() {
     if (st.data) setSettings({
       total_money: Number(st.data.total_money),
       sell_money: Number((st.data as { sell_money?: number }).sell_money ?? 0),
+      lock_money: Number((st.data as { lock_money?: number }).lock_money ?? 0),
       stock_adjustment: Number(st.data.stock_adjustment ?? 0),
       low_money_threshold: Number(st.data.low_money_threshold),
       low_stock_threshold: Number(st.data.low_stock_threshold),
