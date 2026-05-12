@@ -123,6 +123,7 @@ export type Database = {
         Row: {
           created_at: string
           entry_date: string
+          gadi_bhada: number
           id: string
           name: string
           payment: number
@@ -136,6 +137,7 @@ export type Database = {
         Insert: {
           created_at?: string
           entry_date?: string
+          gadi_bhada?: number
           id?: string
           name?: string
           payment?: number
@@ -149,6 +151,7 @@ export type Database = {
         Update: {
           created_at?: string
           entry_date?: string
+          gadi_bhada?: number
           id?: string
           name?: string
           payment?: number
@@ -165,6 +168,7 @@ export type Database = {
         Row: {
           high_txn_threshold: number
           id: number
+          lock_money: number
           low_money_threshold: number
           low_stock_threshold: number
           sell_money: number
@@ -175,6 +179,7 @@ export type Database = {
         Insert: {
           high_txn_threshold?: number
           id?: number
+          lock_money?: number
           low_money_threshold?: number
           low_stock_threshold?: number
           sell_money?: number
@@ -185,6 +190,7 @@ export type Database = {
         Update: {
           high_txn_threshold?: number
           id?: number
+          lock_money?: number
           low_money_threshold?: number
           low_stock_threshold?: number
           sell_money?: number
