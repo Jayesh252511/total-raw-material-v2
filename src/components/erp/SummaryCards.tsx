@@ -166,9 +166,6 @@ export function SummaryCards(p: Props) {
   const [openTotal, setOpenTotal] = useState(false);
   const [openSell, setOpenSell] = useState(false);
   const [openLock, setOpenLock] = useState(false);
-  const stats: Stat[] = [
-    { label: "Total Money", value: fmtINR(p.totalMoney), icon: Wallet, tone: "primary", hint: "Tap for history", onClick: () => setOpenTotal(true) },
-    { label: "Sell Money", value: fmtINR(p.sellMoney), icon: ShoppingCart, tone: "success", hint: "Incl. 5% GST · sum of qty×rate" },
     { label: "Lock Amount", value: fmtINR(p.lockMoney), icon: Lock, tone: "warning", hint: "Add-only · tap for history", onClick: () => setOpenLock(true) },
     { label: "Total Stock", value: fmtTons(p.totalStock), icon: Package, tone: "info" },
     { label: "Yearly Raw Material", value: fmtINR(p.yearRM), icon: Package, tone: "info" },
