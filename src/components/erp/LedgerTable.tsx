@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { RawMaterial } from "@/lib/erpStore";
-import { fmtINR, fmtNum, todayStr } from "@/lib/format";
+import { fmtINR, fmtNum, todayStr, withGst, SELL_GST_RATE } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
 import { Filter, Plus, Search, Trash2, X, FileSpreadsheet, FileText } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -14,11 +14,13 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 type Mode = "purchase" | "sell";
-type Props = { rows: (RawMaterial & { vehicle_number?: string })[]; readOnly: boolean; mode: Mode; onChanged?: () => void | Promise<void> };
+type Row = RawMaterial & { vehicle_number?: string; gadi_bhada?: number };
+type Props = { rows: Row[]; readOnly: boolean; mode: Mode; onChanged?: () => void | Promise<void> };
 
 // purchase: stock+, money- by payment | sell: stock-, money+ by payment
 export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
-  const table = mode === "purchase" ? "raw_materials" : "sells";
+  const isSell = mode === "sell";
+  const table = isSell ? "sells" : "raw_materials";
   const [q, setQ] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -26,7 +28,20 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
 
-  // filtered (search + date range)
+  // For sells: display total = (rate + gadi_bhada) * qty * 1.05  (5% GST baked in)
+  // For purchase: display total = total_amount (rate*qty)
+  const displayTotal = (r: Row) => {
+    const base = isSell
+      ? (Number(r.rate) || 0) * (Number(r.quantity) || 0) + (Number(r.gadi_bhada) || 0) * (Number(r.quantity) || 0)
+      : Number(r.total_amount) || 0;
+    return isSell ? withGst(base) : base;
+  };
+  const displayWithoutGB = (r: Row) => {
+    const base = (Number(r.rate) || 0) * (Number(r.quantity) || 0);
+    return isSell ? withGst(base) : base;
+  };
+
+  // filtered
   const filtered = useMemo(() => rows.filter((r) => {
     if (q && !r.name.toLowerCase().includes(q.toLowerCase())) return false;
     if (from && r.entry_date < from) return false;
@@ -34,29 +49,25 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
     return true;
   }), [rows, q, from, to]);
 
-  // Daily by sheetDate / Monthly by sheetDate's month
   const dayRows = filtered.filter((r) => r.entry_date === sheetDate);
-  const monRows = filtered.filter((r) => r.entry_date.slice(0, 7) === sheetDate.slice(0, 7));
-  const dayAmt = dayRows.reduce((s, r) => s + Number(r.total_amount), 0);
+  const yearRows = filtered.filter((r) => r.entry_date.slice(0, 4) === sheetDate.slice(0, 4));
+  const dayAmt = dayRows.reduce((s, r) => s + displayTotal(r), 0);
   const dayQty = dayRows.reduce((s, r) => s + Number(r.quantity), 0);
-  const monAmt = monRows.reduce((s, r) => s + Number(r.total_amount), 0);
-  const monQty = monRows.reduce((s, r) => s + Number(r.quantity), 0);
+  const yearAmt = yearRows.reduce((s, r) => s + displayTotal(r), 0);
+  const yearQty = yearRows.reduce((s, r) => s + Number(r.quantity), 0);
 
-  // Add row form state
-  const [form, setForm] = useState({ entry_date: todayStr(), name: "", rate: "", quantity: "", payment: "", vehicle_number: "" });
-  function resetForm() { setForm({ entry_date: todayStr(), name: "", rate: "", quantity: "", payment: "", vehicle_number: "" }); }
+  const [form, setForm] = useState({ entry_date: todayStr(), name: "", rate: "", quantity: "", payment: "", vehicle_number: "", gadi_bhada: "" });
+  function resetForm() { setForm({ entry_date: todayStr(), name: "", rate: "", quantity: "", payment: "", vehicle_number: "", gadi_bhada: "" }); }
 
-  // Money column to update: sells use a separate sell_money pot
-  const moneyCol = mode === "purchase" ? "total_money" : "sell_money";
+  const moneyCol = isSell ? "sell_money" : "total_money";
 
   async function adjustMoney(delta: number) {
     if (!delta) return;
     const { data: s } = await supabase.from("settings").select(moneyCol).eq("id", 1).single();
     if (!s) return;
     const current = Number((s as Record<string, number>)[moneyCol] || 0);
-    // purchase: subtract payment from total_money. sell: add payment to sell_money.
-    const next = mode === "purchase" ? current - delta : current + delta;
-    const update = mode === "purchase" ? { total_money: next } : { sell_money: next };
+    const next = isSell ? current + delta : current - delta;
+    const update = isSell ? { sell_money: next } : { total_money: next };
     await supabase.from("settings").update(update).eq("id", 1);
   }
 
@@ -64,23 +75,26 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
     const rate = Number(form.rate) || 0;
     const qty = Number(form.quantity) || 0;
     const payment = Number(form.payment) || 0;
-    const total = rate * qty;
+    const gb = Number(form.gadi_bhada) || 0;
     const insertPayload: Record<string, unknown> = { entry_date: form.entry_date, name: form.name, rate, quantity: qty, payment };
-    if (mode === "sell") insertPayload.vehicle_number = form.vehicle_number;
+    if (isSell) {
+      insertPayload.vehicle_number = form.vehicle_number;
+      insertPayload.gadi_bhada = gb;
+    }
     const { data, error } = await (supabase.from(table as never) as never as ReturnType<typeof supabase.from>)
       .insert(insertPayload).select().single();
     if (error) return toast.error(error.message);
 
     if (payment) await adjustMoney(payment);
-    if (data) await logAudit("created", table, (data as { id: string }).id, { row: data, total });
+    if (data) await logAudit("created", table, (data as { id: string }).id, { row: data });
     setAddOpen(false);
     resetForm();
     await onChanged?.();
     toast.success("Entry added");
   }
 
-  async function updateField(row: RawMaterial & { vehicle_number?: string }, field: "entry_date" | "name" | "rate" | "quantity" | "payment" | "vehicle_number" | "serial_number", value: string) {
-    const isNum = field === "rate" || field === "quantity" || field === "payment" || field === "serial_number";
+  async function updateField(row: Row, field: "entry_date" | "name" | "rate" | "quantity" | "payment" | "vehicle_number" | "serial_number" | "gadi_bhada", value: string) {
+    const isNum = field === "rate" || field === "quantity" || field === "payment" || field === "serial_number" || field === "gadi_bhada";
     const newVal = isNum ? Number(value) || 0 : value;
     const before = { [field]: (row as Record<string, unknown>)[field] };
     const { error } = await (supabase.from(table as never) as never as ReturnType<typeof supabase.from>)
@@ -95,7 +109,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
     await onChanged?.();
   }
 
-  async function deleteRow(row: RawMaterial) {
+  async function deleteRow(row: Row) {
     if (!confirm(`Delete entry #${row.serial_number}?`)) return;
     const { error } = await (supabase.from(table as never) as never as ReturnType<typeof supabase.from>).delete().eq("id", row.id);
     if (error) return toast.error(error.message);
@@ -106,24 +120,39 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
   }
 
   function exportExcel() {
-    const data = filtered.map((r) => ({
-      "Pc No.": r.serial_number, Date: r.entry_date, Name: r.name,
-      Qty: Number(r.quantity), Rate: Number(r.rate), Amount: Number(r.total_amount),
-      Payment: Number(r.payment), Difference: Number(r.total_amount) - Number(r.payment),
-    }));
+    const data = filtered.map((r) => {
+      const total = displayTotal(r);
+      const without = displayWithoutGB(r);
+      const base: Record<string, string | number> = { "Pc No.": r.serial_number, Date: r.entry_date, Name: r.name };
+      if (isSell) base["Vehicle No."] = r.vehicle_number || "";
+      base.Qty = Number(r.quantity);
+      base.Rate = Number(r.rate);
+      if (isSell) base["Gadi Bhada"] = Number(r.gadi_bhada || 0);
+      base[isSell ? "Total Amount (incl. 5% GST)" : "Amount"] = total;
+      if (isSell) base["Amount w/o Gadi Bhada (incl. 5% GST)"] = without;
+      base.Payment = Number(r.payment);
+      base.Difference = total - Number(r.payment);
+      return base;
+    });
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, mode === "purchase" ? "Raw Material" : "Sells");
+    XLSX.utils.book_append_sheet(wb, ws, isSell ? "Sells" : "Raw Material");
     XLSX.writeFile(wb, `${mode}-${sheetDate}.xlsx`);
   }
   function exportPDF() {
     const doc = new jsPDF();
-    doc.text(`${mode === "purchase" ? "Raw Material" : "Sells"} Sheet`, 14, 14);
-    autoTable(doc, {
-      startY: 20, styles: { fontSize: 8 },
-      head: [["Pc", "Date", "Name", "Qty", "Rate", "Amount", "Payment", "Diff"]],
-      body: filtered.map((r) => [r.serial_number, r.entry_date, r.name, Number(r.quantity), Number(r.rate), Number(r.total_amount).toFixed(2), Number(r.payment).toFixed(2), (Number(r.total_amount) - Number(r.payment)).toFixed(2)]),
+    doc.text(`${isSell ? "Sells" : "Raw Material"} Sheet`, 14, 14);
+    const head = isSell
+      ? [["Pc", "Date", "Name", "Vehicle", "Qty", "Rate", "Gadi", "Total (GST)", "Amt w/o GB", "Pay", "Diff"]]
+      : [["Pc", "Date", "Name", "Qty", "Rate", "Amount", "Payment", "Diff"]];
+    const body = filtered.map((r) => {
+      const total = displayTotal(r);
+      const without = displayWithoutGB(r);
+      const diff = total - Number(r.payment);
+      if (isSell) return [r.serial_number, r.entry_date, r.name, r.vehicle_number || "", Number(r.quantity), Number(r.rate), Number(r.gadi_bhada || 0), total.toFixed(2), without.toFixed(2), Number(r.payment).toFixed(2), diff.toFixed(2)];
+      return [r.serial_number, r.entry_date, r.name, Number(r.quantity), Number(r.rate), total.toFixed(2), Number(r.payment).toFixed(2), diff.toFixed(2)];
     });
+    autoTable(doc, { startY: 20, styles: { fontSize: 7 }, head, body });
     doc.save(`${mode}-${sheetDate}.pdf`);
   }
 
@@ -156,7 +185,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                   <div className="rounded-md bg-muted/40 p-3 text-sm">
                     <div className="flex justify-between"><span className="text-muted-foreground">Entries</span><span className="font-semibold">{filtered.length}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Total Qty</span><span className="font-semibold tabular-nums">{fmtNum(filtered.reduce((s, r) => s + Number(r.quantity), 0), 3)} t</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Total Amount</span><span className="font-semibold tabular-nums">{fmtINR(filtered.reduce((s, r) => s + Number(r.total_amount), 0))}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Total Amount{isSell ? " (incl. GST)" : ""}</span><span className="font-semibold tabular-nums">{fmtINR(filtered.reduce((s, r) => s + displayTotal(r), 0))}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Total Payment</span><span className="font-semibold tabular-nums">{fmtINR(filtered.reduce((s, r) => s + Number(r.payment), 0))}</span></div>
                   </div>
                 )}
@@ -175,18 +204,31 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                 <Button size="sm" className="h-10"><Plus className="h-4 w-4" /> Add</Button>
               </DialogTrigger>
               <DialogContent className="max-w-md">
-                <DialogHeader><DialogTitle>{mode === "purchase" ? "Add Raw Material" : "Add Sell Entry"}</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{isSell ? "Add Sell Entry" : "Add Raw Material"}</DialogTitle></DialogHeader>
                 <div className="grid gap-3 py-2">
                   <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Date</span><Input type="date" value={form.entry_date} onChange={(e) => setForm({ ...form, entry_date: e.target.value })} /></label>
                   <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Name</span><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Client / supplier" /></label>
-                  {mode === "sell" && (
+                  {isSell && (
                     <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Vehicle Number</span><Input value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} placeholder="e.g. MH12 AB 1234" /></label>
                   )}
                   <div className="grid grid-cols-2 gap-2">
                     <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Qty (t)</span><Input type="number" step="0.001" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></label>
                     <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Rate (₹/t)</span><Input type="number" step="0.01" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} /></label>
                   </div>
-                  <div className="rounded-md bg-muted/40 px-3 py-2 flex justify-between text-sm"><span className="text-muted-foreground">Amount</span><span className="font-semibold tabular-nums">{fmtINR((Number(form.rate) || 0) * (Number(form.quantity) || 0))}</span></div>
+                  {isSell && (
+                    <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Gadi Bhada (₹/t)</span><Input type="number" step="0.01" value={form.gadi_bhada} onChange={(e) => setForm({ ...form, gadi_bhada: e.target.value })} /></label>
+                  )}
+                  <div className="rounded-md bg-muted/40 px-3 py-2 space-y-1 text-sm">
+                    {isSell ? (
+                      <>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Amount w/o Gadi Bhada</span><span className="font-semibold tabular-nums">{fmtINR(withGst((Number(form.rate) || 0) * (Number(form.quantity) || 0)))}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Total Amount</span><span className="font-semibold tabular-nums">{fmtINR(withGst(((Number(form.rate) || 0) + (Number(form.gadi_bhada) || 0)) * (Number(form.quantity) || 0)))}</span></div>
+                        <p className="text-[10px] text-muted-foreground">Includes 5% GST</p>
+                      </>
+                    ) : (
+                      <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><span className="font-semibold tabular-nums">{fmtINR((Number(form.rate) || 0) * (Number(form.quantity) || 0))}</span></div>
+                    )}
+                  </div>
                   <label><span className="text-[11px] font-medium uppercase text-muted-foreground">Payment (₹)</span><Input type="number" step="0.01" value={form.payment} onChange={(e) => setForm({ ...form, payment: e.target.value })} /></label>
                 </div>
                 <DialogFooter>
@@ -199,17 +241,17 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
         </div>
       </div>
 
-      {/* Daily/Monthly cards */}
+      {/* Daily/Yearly cards */}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border bg-card p-4 shadow-soft">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Daily Total</p>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Daily Total{isSell ? " (incl. 5% GST)" : ""}</p>
           <p className="mt-1 text-2xl font-bold tabular-nums">{fmtINR(dayAmt)}</p>
           <p className="mt-1 text-xs text-muted-foreground">Qty: {fmtNum(dayQty, 3)} t</p>
         </div>
         <div className="rounded-xl border bg-card p-4 shadow-soft">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Monthly Total</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums">{fmtINR(monAmt)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Qty: {fmtNum(monQty, 3)} t</p>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Yearly Total{isSell ? " (incl. 5% GST)" : ""}</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">{fmtINR(yearAmt)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Qty: {fmtNum(yearQty, 3)} t · {sheetDate.slice(0, 4)}</p>
         </div>
       </div>
 
@@ -217,7 +259,9 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
       <div className="space-y-2 md:hidden">
         {filtered.length === 0 && <p className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">No entries. Tap Add to create one.</p>}
         {filtered.map((r) => {
-          const diff = Number(r.total_amount) - Number(r.payment);
+          const total = displayTotal(r);
+          const without = displayWithoutGB(r);
+          const diff = total - Number(r.payment);
           return (
             <div key={r.id} className="rounded-xl border bg-card p-3 shadow-soft">
               <div className="flex items-center justify-between gap-2">
@@ -228,7 +272,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                     <span>· {r.entry_date}</span>
                   </div>
                   <p className="text-sm font-semibold mt-0.5">{r.name || "—"}</p>
-                  {mode === "sell" && r.vehicle_number && <p className="text-[11px] text-muted-foreground font-mono">🚚 {r.vehicle_number}</p>}
+                  {isSell && r.vehicle_number && <p className="text-[11px] text-muted-foreground font-mono">🚚 {r.vehicle_number}</p>}
                 </div>
                 {!readOnly && (
                   <button onClick={() => deleteRow(r)} className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
@@ -237,7 +281,15 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
               <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
                 <div className="rounded bg-muted/30 px-2 py-1.5"><span className="block text-[10px] uppercase text-muted-foreground">Qty</span><span className="tabular-nums">{fmtNum(Number(r.quantity), 3)} t</span></div>
                 <div className="rounded bg-muted/30 px-2 py-1.5"><span className="block text-[10px] uppercase text-muted-foreground">Rate</span><span className="tabular-nums">{fmtINR(Number(r.rate))}</span></div>
-                <div className="rounded bg-muted/30 px-2 py-1.5"><span className="block text-[10px] uppercase text-muted-foreground">Amount</span><span className="font-semibold tabular-nums">{fmtINR(Number(r.total_amount))}</span></div>
+                {isSell && (
+                  <div className="rounded bg-muted/30 px-2 py-1.5"><span className="block text-[10px] uppercase text-muted-foreground">Gadi Bhada</span>
+                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.gadi_bhada || 0} onBlur={(e) => Number(e.target.value) !== Number(r.gadi_bhada || 0) && updateField(r, "gadi_bhada", e.target.value)} className="cell-input text-right tabular-nums !h-8" />
+                  </div>
+                )}
+                <div className="rounded bg-muted/30 px-2 py-1.5"><span className="block text-[10px] uppercase text-muted-foreground">Total{isSell ? " (GST)" : ""}</span><span className="font-semibold tabular-nums">{fmtINR(total)}</span></div>
+                {isSell && (
+                  <div className="rounded bg-muted/30 px-2 py-1.5 col-span-2"><span className="block text-[10px] uppercase text-muted-foreground">Amount w/o Gadi Bhada (incl. GST)</span><span className="font-semibold tabular-nums">{fmtINR(without)}</span></div>
+                )}
                 <div className="rounded bg-muted/30 px-2 py-1.5"><span className="block text-[10px] uppercase text-muted-foreground">Payment</span>
                   <input disabled={readOnly} type="number" step="0.01" defaultValue={r.payment} onBlur={(e) => Number(e.target.value) !== Number(r.payment) && updateField(r, "payment", e.target.value)} className="cell-input text-right tabular-nums !h-8" />
                 </div>
@@ -259,28 +311,34 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
               <th className="px-3 py-2.5 text-left font-medium w-16">Pc No.</th>
               <th className="px-3 py-2.5 text-left font-medium w-32">Date</th>
               <th className="px-3 py-2.5 text-left font-medium">Name</th>
-              {mode === "sell" && <th className="px-3 py-2.5 text-left font-medium w-36">Vehicle No.</th>}
+              {isSell && <th className="px-3 py-2.5 text-left font-medium w-36">Vehicle No.</th>}
               <th className="px-3 py-2.5 text-right font-medium w-24">Qty</th>
               <th className="px-3 py-2.5 text-right font-medium w-24">Rate</th>
-              <th className="px-3 py-2.5 text-right font-medium w-32">Amount</th>
+              {isSell && <th className="px-3 py-2.5 text-right font-medium w-28">Gadi Bhada</th>}
+              <th className="px-3 py-2.5 text-right font-medium w-32">Total Amount{isSell ? " (GST)" : ""}</th>
+              {isSell && <th className="px-3 py-2.5 text-right font-medium w-36">Amt w/o Gadi Bhada (GST)</th>}
               <th className="px-3 py-2.5 text-right font-medium w-28">Payment</th>
               <th className="px-3 py-2.5 text-right font-medium w-28">Difference</th>
               {!readOnly && <th className="w-12"></th>}
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={9} className="py-10 text-center text-sm text-muted-foreground">No entries yet.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={isSell ? 12 : 9} className="py-10 text-center text-sm text-muted-foreground">No entries yet.</td></tr>}
             {filtered.map((r) => {
-              const diff = Number(r.total_amount) - Number(r.payment);
+              const total = displayTotal(r);
+              const without = displayWithoutGB(r);
+              const diff = total - Number(r.payment);
               return (
                 <tr key={r.id} className="border-t hover:bg-muted/20">
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input text-left tabular-nums" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="date" defaultValue={r.entry_date} onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input text-primary" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.name} placeholder="Name" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" /></td>
-                  {mode === "sell" && <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.vehicle_number || ""} placeholder="Vehicle no." onBlur={(e) => e.target.value !== (r.vehicle_number || "") && updateField(r, "vehicle_number", e.target.value)} className="cell-input font-mono" /></td>}
+                  {isSell && <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.vehicle_number || ""} placeholder="Vehicle no." onBlur={(e) => e.target.value !== (r.vehicle_number || "") && updateField(r, "vehicle_number", e.target.value)} className="cell-input font-mono" /></td>}
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.001" defaultValue={r.quantity} onBlur={(e) => Number(e.target.value) !== Number(r.quantity) && updateField(r, "quantity", e.target.value)} className="cell-input text-right tabular-nums" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.rate} onBlur={(e) => Number(e.target.value) !== Number(r.rate) && updateField(r, "rate", e.target.value)} className="cell-input text-right tabular-nums" /></td>
-                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtNum(Number(r.total_amount), 2)}</td>
+                  {isSell && <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.gadi_bhada || 0} onBlur={(e) => Number(e.target.value) !== Number(r.gadi_bhada || 0) && updateField(r, "gadi_bhada", e.target.value)} className="cell-input text-right tabular-nums" /></td>}
+                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtNum(total, 2)}</td>
+                  {isSell && <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtNum(without, 2)}</td>}
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.payment} onBlur={(e) => Number(e.target.value) !== Number(r.payment) && updateField(r, "payment", e.target.value)} className="cell-input text-right tabular-nums" /></td>
                   <td className={`px-3 py-2 text-right font-semibold tabular-nums ${diff === 0 ? "" : diff > 0 ? "text-destructive" : "text-amber-600"}`}>{fmtNum(diff, 2)}</td>
                   {!readOnly && <td className="px-2 py-1"><button onClick={() => deleteRow(r)} className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button></td>}
@@ -289,6 +347,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
             })}
           </tbody>
         </table>
+        {isSell && <p className="px-3 py-2 text-[11px] text-muted-foreground border-t">All sell totals include {SELL_GST_RATE * 100}% GST. Total Amount = (Rate + Gadi Bhada) × Qty × 1.05.</p>}
       </div>
     </div>
   );
