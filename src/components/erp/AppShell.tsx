@@ -4,6 +4,7 @@ import { BarChart3, Boxes, FileSpreadsheet, FileText, Home, Layers, Lock, Receip
 import { Button } from "@/components/ui/button";
 import { AuthButton } from "@/components/erp/AuthButton";
 import { SettingsDialog } from "@/components/erp/SettingsDialog";
+import { MoneyHistoryDialog } from "@/components/erp/MoneyHistoryDialog";
 import { Toaster } from "@/components/ui/sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -32,79 +33,80 @@ const navItems = [
   { to: "/reports", label: "Reports", icon: BarChart3 },
 ] as const;
 
-function AddMoneyDialog({ currentMoney, disabled }: { currentMoney: number; disabled: boolean }) {
+function AddFundsDialog({ currentMoney, currentLock, disabled }: { currentMoney: number; currentLock: number; disabled: boolean }) {
   const [open, setOpen] = useState(false);
   const [amt, setAmt] = useState("");
   const [note, setNote] = useState("");
   async function add() {
     const n = Number(amt) || 0;
     if (n === 0) return;
-    const next = currentMoney + n;
-    const { error } = await supabase.from("settings").update({ total_money: next }).eq("id", 1);
+    const nextTotal = currentMoney + n;
+    const nextLock = currentLock + n;
+    
+    const { error } = await supabase.from("settings").update({ 
+      total_money: nextTotal, 
+      lock_money: nextLock 
+    }).eq("id", 1);
+    
     if (error) return toast.error(error.message);
-    await logAudit("settings_changed", "settings", "1", { added_money: n, note, before: currentMoney, after: next });
-    toast.success(`Added ${fmtINR(n)} to total money`);
+    
+    await logAudit("settings_changed", "settings", "1", { 
+      added_to_lock_and_total: n, 
+      note, 
+      total_before: currentMoney, 
+      total_after: nextTotal,
+      lock_before: currentLock,
+      lock_after: nextLock,
+      // Legacy compatibility for history logic
+      added_money: n,
+      before: currentMoney,
+      after: nextTotal
+    });
+    
+    toast.success(`Added ${fmtINR(n)} to funds`);
     setAmt(""); setNote(""); setOpen(false);
   }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={disabled} className="h-8 gap-1">
-          <Wallet className="h-3.5 w-3.5" /><Plus className="h-3 w-3" /><span className="hidden sm:inline">Money</span>
+        <Button variant="outline" size="sm" disabled={disabled} className="h-8 gap-1 bg-primary/5 hover:bg-primary/10 border-primary/20">
+          <Wallet className="h-3.5 w-3.5" /><Plus className="h-3 w-3" /><span>Add Funds</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Add money to total</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Add Funds</DialogTitle></DialogHeader>
         <div className="space-y-3 py-2">
-          <p className="text-xs text-muted-foreground">Current: <span className="font-semibold">{fmtINR(currentMoney)}</span></p>
-          <div><Label className="text-xs">Amount (₹)</Label><Input type="number" step="0.01" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="e.g. 5000" autoFocus /></div>
-          <div><Label className="text-xs">Note (optional)</Label><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Cash deposit, advance to worker..." /></div>
-          {amt && <p className="rounded-md bg-muted/40 px-3 py-2 text-sm">New total: <span className="font-semibold tabular-nums">{fmtINR(currentMoney + (Number(amt) || 0))}</span></p>}
+          <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">This will add money to both Total and Lock balances.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-md bg-muted/40 p-2 text-center">
+              <span className="block text-[10px] text-muted-foreground uppercase">Total Money</span>
+              <span className="font-semibold text-sm">{fmtINR(currentMoney)}</span>
+            </div>
+            <div className="rounded-md bg-muted/40 p-2 text-center">
+              <span className="block text-[10px] text-muted-foreground uppercase">Lock Amount</span>
+              <span className="font-semibold text-sm">{fmtINR(currentLock)}</span>
+            </div>
+          </div>
+          <div><Label className="text-xs">Amount to Add (₹)</Label><Input type="number" step="0.01" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="e.g. 5000" autoFocus /></div>
+          <div><Label className="text-xs">Note (optional)</Label><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Cash deposit, source..." /></div>
+          {amt && (
+            <div className="rounded-md bg-primary/5 p-3 text-sm space-y-1">
+              <div className="flex justify-between"><span>New Total:</span><span className="font-bold tabular-nums">{fmtINR(currentMoney + (Number(amt) || 0))}</span></div>
+              <div className="flex justify-between"><span>New Lock:</span><span className="font-bold tabular-nums">{fmtINR(currentLock + (Number(amt) || 0))}</span></div>
+            </div>
+          )}
         </div>
-        <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={add}>Add</Button></DialogFooter>
+        <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={add}>Confirm Add</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function AddLockMoneyDialog({ currentLock, disabled }: { currentLock: number; disabled: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [amt, setAmt] = useState("");
-  const [note, setNote] = useState("");
-  async function add() {
-    const n = Number(amt) || 0;
-    if (n <= 0) return toast.error("Lock amount can only be added (positive value)");
-    const next = currentLock + n;
-    const { error } = await supabase.from("settings").update({ lock_money: next } as never).eq("id", 1);
-    if (error) return toast.error(error.message);
-    await logAudit("settings_changed", "settings", "1", { added_lock_money: n, note, before: currentLock, after: next });
-    toast.success(`Added ${fmtINR(n)} to Lock Amount`);
-    setAmt(""); setNote(""); setOpen(false);
-  }
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={disabled} className="h-8 gap-1">
-          <Lock className="h-3.5 w-3.5" /><Plus className="h-3 w-3" /><span className="hidden sm:inline">Lock</span>
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Add to Lock Amount</DialogTitle></DialogHeader>
-        <div className="space-y-3 py-2">
-          <p className="text-xs text-muted-foreground">Current Lock: <span className="font-semibold">{fmtINR(currentLock)}</span></p>
-          <p className="text-[11px] text-warning">Lock amount is add-only. It can never decrease.</p>
-          <div><Label className="text-xs">Amount (₹)</Label><Input type="number" step="0.01" min="0" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="e.g. 10000" autoFocus /></div>
-          <div><Label className="text-xs">Note (optional)</Label><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Source / reason..." /></div>
-          {amt && <p className="rounded-md bg-muted/40 px-3 py-2 text-sm">New lock: <span className="font-semibold tabular-nums">{fmtINR(currentLock + (Number(amt) || 0))}</span></p>}
-        </div>
-        <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={add}>Add</Button></DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
+
 
 export function AppShell({ children, settings, readOnly, rawMaterials, expenses, totalStock }: Props) {
   const pathname = useLocation({ select: (s) => s.pathname });
+  const [openLockHistory, setOpenLockHistory] = useState(false);
   return (
     <div className="min-h-screen bg-background pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0">
       <Toaster richColors position="top-right" />
@@ -131,8 +133,20 @@ export function AppShell({ children, settings, readOnly, rawMaterials, expenses,
             })}
           </nav>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <AddMoneyDialog currentMoney={settings.total_money} disabled={readOnly} />
-            <AddLockMoneyDialog currentLock={settings.lock_money} disabled={readOnly} />
+            <AddFundsDialog currentMoney={settings.total_money} currentLock={settings.lock_money} disabled={readOnly} />
+            <button 
+              onClick={() => setOpenLockHistory(true)}
+              className="flex h-8 items-center gap-1.5 rounded-md border bg-card px-2 text-xs font-semibold shadow-soft hover:bg-accent transition-colors"
+            >
+              <Lock className="h-3 w-3 text-warning" />
+              <span className="tabular-nums">{fmtINR(settings.lock_money)}</span>
+            </button>
+            <MoneyHistoryDialog 
+              open={openLockHistory} 
+              onOpenChange={setOpenLockHistory} 
+              field="lock_money" 
+              title="Lock Amount — History" 
+            />
             <AuthButton />
             <SettingsDialog settings={settings} disabled={readOnly} />
             <Button variant="outline" size="sm" onClick={() => exportToExcel(rawMaterials, expenses, settings, totalStock)} className="hidden h-8 md:inline-flex">
