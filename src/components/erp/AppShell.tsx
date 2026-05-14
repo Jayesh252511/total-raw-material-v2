@@ -106,7 +106,7 @@ function AddFundsDialog({ currentMoney, currentLock, disabled }: { currentMoney:
 
 export function AppShell({ children, settings, readOnly, rawMaterials, expenses, totalStock }: Props) {
   const pathname = useLocation({ select: (s) => s.pathname });
-  const [openLockHistory, setOpenLockHistory] = useState(false);
+
   return (
     <div className="min-h-screen bg-background pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0">
       <Toaster richColors position="top-right" />
@@ -134,19 +134,7 @@ export function AppShell({ children, settings, readOnly, rawMaterials, expenses,
           </nav>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <AddFundsDialog currentMoney={settings.total_money} currentLock={settings.lock_money} disabled={readOnly} />
-            <button 
-              onClick={() => setOpenLockHistory(true)}
-              className="flex h-8 items-center gap-1.5 rounded-md border bg-card px-2 text-xs font-semibold shadow-soft hover:bg-accent transition-colors"
-            >
-              <Lock className="h-3 w-3 text-warning" />
-              <span className="tabular-nums">{fmtINR(settings.lock_money)}</span>
-            </button>
-            <MoneyHistoryDialog 
-              open={openLockHistory} 
-              onOpenChange={setOpenLockHistory} 
-              field="lock_money" 
-              title="Lock Amount — History" 
-            />
+
             <AuthButton />
             <SettingsDialog settings={settings} disabled={readOnly} />
             <Button variant="outline" size="sm" onClick={() => exportToExcel(rawMaterials, expenses, settings, totalStock)} className="hidden h-8 md:inline-flex">
