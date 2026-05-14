@@ -132,7 +132,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
       base[isSell ? "Total Amount (incl. 5% GST)" : "Amount"] = total;
       if (isSell) base["Amount w/o Gadi Bhada (incl. 5% GST)"] = without;
       base.Payment = Number(r.payment);
-      base.Difference = total - Number(r.payment);
+      base.Difference = isSell ? Number(r.payment) - without : total - Number(r.payment);
       return base;
     });
     const ws = XLSX.utils.json_to_sheet(data);
@@ -149,7 +149,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
     const body = filtered.map((r) => {
       const total = displayTotal(r);
       const without = displayWithoutGB(r);
-      const diff = total - Number(r.payment);
+      const diff = isSell ? Number(r.payment) - without : total - Number(r.payment);
       if (isSell) return [r.serial_number, r.entry_date, r.name, r.vehicle_number || "", Number(r.quantity), Number(r.rate), Number(r.gadi_bhada || 0), total.toFixed(2), without.toFixed(2), Number(r.payment).toFixed(2), diff.toFixed(2)];
       return [r.serial_number, r.entry_date, r.name, Number(r.quantity), Number(r.rate), total.toFixed(2), Number(r.payment).toFixed(2), diff.toFixed(2)];
     });
@@ -262,7 +262,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
         {filtered.map((r) => {
           const total = displayTotal(r);
           const without = displayWithoutGB(r);
-          const diff = total - Number(r.payment);
+          const diff = isSell ? Number(r.payment) - without : total - Number(r.payment);
           return (
             <div key={r.id} className="rounded-xl border bg-card p-3 shadow-soft">
               <div className="flex items-center justify-between gap-2">
@@ -332,7 +332,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
             {filtered.map((r) => {
               const total = displayTotal(r);
               const without = displayWithoutGB(r);
-              const diff = total - Number(r.payment);
+              const diff = isSell ? Number(r.payment) - without : total - Number(r.payment);
               return (
                 <tr key={r.id} className="border-t hover:bg-muted/20">
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input text-left tabular-nums" /></td>
