@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { externalDb } from "@/integrations/external-db/client";
+import { isThisYear } from "@/lib/format";
 
 export type RawMaterial = {
   id: string;
@@ -135,7 +136,14 @@ export function useERPData() {
   const pcAmount = pcEntries.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0);
   const soldStock = sells.reduce((s, r) => s + Number(r.quantity || 0), 0);
   const totalStock = pcStock - soldStock + Number(settings.stock_adjustment || 0);
-  const effectiveMoney = Number(settings.total_money || 0);
 
-  return { rawMaterials, sells, expenses, pcEntries, settings, auditLogs, loading, refresh, totalStock, pcStock, soldStock, pcAmount, effectiveMoney };
+  // Calculate Yearly Expenses (Maintenance + Raw Material Purchases)
+  const yearMaint = expenses.filter((e) => isThisYear(e.entry_date)).reduce((s, e) => s + Number(e.amount), 0);
+  const yearRM = pcEntries.filter((r) => isThisYear(r.entry_date)).reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0);
+  const yearExpense = yearMaint + yearRM;
+
+  // Total Money = Lock Amount - Yearly Expense
+  const effectiveMoney = Number(settings.lock_money || 0) - yearExpense;
+
+  return { rawMaterials, sells, expenses, pcEntries, settings, auditLogs, loading, refresh, totalStock, pcStock, soldStock, pcAmount, yearExpense, effectiveMoney };
 }

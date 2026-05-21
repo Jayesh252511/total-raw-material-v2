@@ -8,8 +8,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { logAudit } from "@/lib/audit";
 import type { Settings } from "@/lib/erpStore";
 import { toast } from "sonner";
+import { fmtINR } from "@/lib/format";
 
-export function SettingsDialog({ settings, disabled }: { settings: Settings; disabled: boolean }) {
+export function SettingsDialog({ settings, effectiveMoney, disabled }: { settings: Settings; effectiveMoney: number; disabled: boolean }) {
   const [open, setOpen] = useState(false);
   const [money, setMoney] = useState(String(settings.total_money));
   const [stock, setStock] = useState(String(settings.stock_adjustment));
@@ -60,6 +61,10 @@ export function SettingsDialog({ settings, disabled }: { settings: Settings; dis
             <Label className="text-xs">Total Money Available (₹)</Label>
             <Input type="number" step="0.01" value={money} onChange={(e) => setMoney(e.target.value)} />
             <p className="text-[11px] text-muted-foreground mt-1">Set the cash balance. Auto-deducted on entries.</p>
+            <div className="mt-2 text-xs font-semibold text-primary bg-primary/5 border border-primary/10 rounded px-2 py-1 flex justify-between">
+              <span>Net Available:</span>
+              <span className="font-bold tabular-nums">{fmtINR(effectiveMoney)}</span>
+            </div>
           </div>
           <div>
             <Label className="text-xs">Stock Adjustment (t)</Label>

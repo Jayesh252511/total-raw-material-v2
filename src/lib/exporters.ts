@@ -4,13 +4,13 @@ import autoTable from "jspdf-autotable";
 import type { RawMaterial, Expense, Settings } from "@/lib/erpStore";
 import { fmtINR, todayStr } from "@/lib/format";
 
-export function exportToExcel(rm: RawMaterial[], ex: Expense[], settings: Settings, totalStock: number) {
+export function exportToExcel(rm: RawMaterial[], ex: Expense[], settings: Settings, totalStock: number, effectiveMoney: number) {
   const wb = XLSX.utils.book_new();
   const summary = [
     ["ERP Summary Report", ""],
     ["Generated", new Date().toLocaleString("en-IN")],
     [""],
-    ["Total Money Available", Number(settings.total_money)],
+    ["Total Money Available", effectiveMoney],
     ["Total Stock (tons)", totalStock],
     ["Stock Adjustment (tons)", Number(settings.stock_adjustment)],
     ["Total Raw Material Entries", rm.length],
@@ -45,7 +45,7 @@ export function exportToExcel(rm: RawMaterial[], ex: Expense[], settings: Settin
   XLSX.writeFile(wb, `erp-report-${todayStr()}.xlsx`);
 }
 
-export function exportToPDF(rm: RawMaterial[], ex: Expense[], settings: Settings, totalStock: number) {
+export function exportToPDF(rm: RawMaterial[], ex: Expense[], settings: Settings, totalStock: number, effectiveMoney: number) {
   const doc = new jsPDF();
   const w = doc.internal.pageSize.getWidth();
 
@@ -62,7 +62,7 @@ export function exportToPDF(rm: RawMaterial[], ex: Expense[], settings: Settings
     startY: 32,
     head: [["Metric", "Value"]],
     body: [
-      ["Total Money Available", fmtINR(Number(settings.total_money))],
+      ["Total Money Available", fmtINR(effectiveMoney)],
       ["Total Stock", `${totalStock.toFixed(3)} tons`],
       ["Stock Adjustment", `${Number(settings.stock_adjustment).toFixed(3)} tons`],
       ["Raw Material Entries", String(rm.length)],

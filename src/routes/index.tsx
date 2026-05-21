@@ -18,7 +18,7 @@ export const Route = createFileRoute("/")({
 function ERPDashboard() {
   return (
     <ERPPageFrame>
-      {({ rawMaterials, expenses, settings, auditLogs, totalStock }) => (
+      {({ rawMaterials, expenses, settings, auditLogs, totalStock, effectiveMoney }) => (
         <div className="space-y-4">
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
             <QuickLink to="/pc-entries" icon={Boxes} title="Raw Material" subtitle="Daily PC entries · money out" />
@@ -28,10 +28,10 @@ function ERPDashboard() {
             <QuickLink to="/history" icon={History} title="History" subtitle="Device & location log" />
           </div>
           <div className="grid grid-cols-2 gap-2 md:hidden">
-            <Button variant="outline" onClick={() => exportToExcel(rawMaterials, expenses, settings, totalStock)}>
+            <Button variant="outline" onClick={() => exportToExcel(rawMaterials, expenses, settings, totalStock, effectiveMoney)}>
               <Download className="h-4 w-4" /> Excel
             </Button>
-            <Button variant="outline" onClick={() => exportToPDF(rawMaterials, expenses, settings, totalStock)}>
+            <Button variant="outline" onClick={() => exportToPDF(rawMaterials, expenses, settings, totalStock, effectiveMoney)}>
               <Download className="h-4 w-4" /> PDF
             </Button>
           </div>

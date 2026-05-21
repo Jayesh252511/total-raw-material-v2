@@ -2,12 +2,12 @@ import { AlertTriangle, AlertCircle, TrendingUp } from "lucide-react";
 import type { RawMaterial, Expense, Settings } from "@/lib/erpStore";
 import { fmtINR, fmtNum } from "@/lib/format";
 
-type Props = { settings: Settings; totalStock: number; rawMaterials: RawMaterial[]; expenses: Expense[] };
+type Props = { settings: Settings; effectiveMoney: number; totalStock: number; rawMaterials: RawMaterial[]; expenses: Expense[] };
 
-export function AlertsBar({ settings, totalStock, rawMaterials, expenses }: Props) {
+export function AlertsBar({ settings, effectiveMoney, totalStock, rawMaterials, expenses }: Props) {
   const alerts: { tone: "warning" | "danger" | "info"; msg: string; icon: typeof AlertTriangle }[] = [];
-  if (settings.total_money < settings.low_money_threshold) {
-    alerts.push({ tone: "danger", icon: AlertCircle, msg: `Low money: ${fmtINR(settings.total_money)} (below ${fmtINR(settings.low_money_threshold)})` });
+  if (effectiveMoney < settings.low_money_threshold) {
+    alerts.push({ tone: "danger", icon: AlertCircle, msg: `Low money: ${fmtINR(effectiveMoney)} (below ${fmtINR(settings.low_money_threshold)})` });
   }
   if (totalStock < settings.low_stock_threshold) {
     alerts.push({ tone: "warning", icon: AlertTriangle, msg: `Low stock: ${fmtNum(totalStock, 3)} t (below ${fmtNum(settings.low_stock_threshold, 3)} t)` });

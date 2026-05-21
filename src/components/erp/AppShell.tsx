@@ -19,6 +19,7 @@ import { fmtINR } from "@/lib/format";
 type Props = {
   children: React.ReactNode;
   settings: Settings;
+  effectiveMoney: number;
   readOnly: boolean;
   rawMaterials: RawMaterial[];
   expenses: Expense[];
@@ -33,7 +34,7 @@ const navItems = [
   { to: "/reports", label: "Reports", icon: BarChart3 },
 ] as const;
 
-function AddFundsDialog({ currentMoney, currentLock, disabled }: { currentMoney: number; currentLock: number; disabled: boolean }) {
+function AddFundsDialog({ currentMoney, effectiveMoney, currentLock, disabled }: { currentMoney: number; effectiveMoney: number; currentLock: number; disabled: boolean }) {
   const [open, setOpen] = useState(false);
   const [amt, setAmt] = useState("");
   const [note, setNote] = useState("");
@@ -79,7 +80,7 @@ function AddFundsDialog({ currentMoney, currentLock, disabled }: { currentMoney:
           <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">This will add money to both Total and Lock balances.</p>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-md bg-muted/40 p-2 text-center">
-              <span className="block text-[10px] text-muted-foreground uppercase">Total Money</span>
+              <span className="block text-[10px] text-muted-foreground uppercase">Base Total Money</span>
               <span className="font-semibold text-sm">{fmtINR(currentMoney)}</span>
             </div>
             <div className="rounded-md bg-muted/40 p-2 text-center">
@@ -87,12 +88,17 @@ function AddFundsDialog({ currentMoney, currentLock, disabled }: { currentMoney:
               <span className="font-semibold text-sm">{fmtINR(currentLock)}</span>
             </div>
           </div>
+          <div className="rounded-md bg-primary/5 p-2 text-center border border-primary/10">
+            <span className="block text-[10px] text-primary uppercase font-semibold">Net Total Money (Available)</span>
+            <span className="font-bold text-sm text-primary tabular-nums">{fmtINR(effectiveMoney)}</span>
+          </div>
           <div><Label className="text-xs">Amount to Add (₹)</Label><Input type="number" step="0.01" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="e.g. 5000" autoFocus /></div>
           <div><Label className="text-xs">Note (optional)</Label><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Cash deposit, source..." /></div>
           {amt && (
             <div className="rounded-md bg-primary/5 p-3 text-sm space-y-1">
               <div className="flex justify-between"><span>New Total:</span><span className="font-bold tabular-nums">{fmtINR(currentMoney + (Number(amt) || 0))}</span></div>
               <div className="flex justify-between"><span>New Lock:</span><span className="font-bold tabular-nums">{fmtINR(currentLock + (Number(amt) || 0))}</span></div>
+              <div className="flex justify-between text-primary font-semibold"><span>New Net Available:</span><span className="font-bold tabular-nums">{fmtINR(effectiveMoney + (Number(amt) || 0))}</span></div>
             </div>
           )}
         </div>
@@ -104,7 +110,7 @@ function AddFundsDialog({ currentMoney, currentLock, disabled }: { currentMoney:
 
 
 
-export function AppShell({ children, settings, readOnly, rawMaterials, expenses, totalStock }: Props) {
+export function AppShell({ children, settings, effectiveMoney, readOnly, rawMaterials, expenses, totalStock }: Props) {
   const pathname = useLocation({ select: (s) => s.pathname });
 
   return (
@@ -133,14 +139,14 @@ export function AppShell({ children, settings, readOnly, rawMaterials, expenses,
             })}
           </nav>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <AddFundsDialog currentMoney={settings.total_money} currentLock={settings.lock_money} disabled={readOnly} />
+            <AddFundsDialog currentMoney={settings.total_money} effectiveMoney={effectiveMoney} currentLock={settings.lock_money} disabled={readOnly} />
 
             <AuthButton />
-            <SettingsDialog settings={settings} disabled={readOnly} />
-            <Button variant="outline" size="sm" onClick={() => exportToExcel(rawMaterials, expenses, settings, totalStock)} className="hidden h-8 md:inline-flex">
+            <SettingsDialog settings={settings} effectiveMoney={effectiveMoney} disabled={readOnly} />
+            <Button variant="outline" size="sm" onClick={() => exportToExcel(rawMaterials, expenses, settings, totalStock, effectiveMoney)} className="hidden h-8 md:inline-flex">
               <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={() => exportToPDF(rawMaterials, expenses, settings, totalStock)} className="hidden h-8 md:inline-flex">
+            <Button variant="outline" size="sm" onClick={() => exportToPDF(rawMaterials, expenses, settings, totalStock, effectiveMoney)} className="hidden h-8 md:inline-flex">
               <FileText className="h-3.5 w-3.5" /> PDF
             </Button>
           </div>

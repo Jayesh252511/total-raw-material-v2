@@ -33,23 +33,23 @@ export function ERPPageFrame({ children, showSummary = true, showAlerts = true }
       lockMoney: erp.settings.lock_money,
       totalStock: erp.totalStock,
       todayExpense: todayMaint + todayRM,
-      yearExpense: yearMaint + yearRM,
+      yearExpense: erp.yearExpense,
       todayTons,
       yearTons,
       todayMaint,
       yearMaint,
       yearRM,
     };
-  }, [erp.pcEntries, erp.expenses, erp.sells, erp.effectiveMoney, erp.settings.lock_money, erp.totalStock]);
+  }, [erp.pcEntries, erp.expenses, erp.sells, erp.effectiveMoney, erp.settings.lock_money, erp.totalStock, erp.yearExpense]);
 
   return (
-    <AppShell settings={erp.settings} readOnly={readOnly} rawMaterials={erp.rawMaterials} expenses={erp.expenses} totalStock={erp.totalStock}>
+    <AppShell settings={erp.settings} effectiveMoney={erp.effectiveMoney} readOnly={readOnly} rawMaterials={erp.rawMaterials} expenses={erp.expenses} totalStock={erp.totalStock}>
       {erp.loading ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-[88px] rounded-xl border bg-card animate-pulse" />)}
         </div>
       ) : showSummary ? <SummaryCards {...stats} /> : null}
-      {showAlerts && <AlertsBar settings={erp.settings} totalStock={erp.totalStock} rawMaterials={erp.rawMaterials} expenses={erp.expenses} />}
+      {showAlerts && <AlertsBar settings={erp.settings} effectiveMoney={erp.effectiveMoney} totalStock={erp.totalStock} rawMaterials={erp.rawMaterials} expenses={erp.expenses} />}
       {children({ ...erp, readOnly })}
     </AppShell>
   );
