@@ -25,8 +25,8 @@ export function ERPPageFrame({ children, showSummary = true, showAlerts = true }
     const yearRM = erp.pcEntries.filter((r) => isThisYear(r.entry_date)).reduce((s, r) => s + amt(r), 0);
     const todayTons = erp.pcEntries.filter((r) => isToday(r.entry_date)).reduce((s, r) => s + Number(r.qty), 0);
     const yearTons = erp.pcEntries.filter((r) => isThisYear(r.entry_date)).reduce((s, r) => s + Number(r.qty), 0);
-    // Sell Money on dashboard = Net Sells (Qty * Rate * 1.05 - Gadi Bhada flat deduction)
-    const sellMoney = erp.sells.reduce((s, r) => s + (withGst(Number(r.quantity || 0) * Number(r.rate || 0)) - Number(r.gadi_bhada || 0)), 0);
+    // Sell Money on dashboard = Sell Payment Received
+    const sellMoney = erp.sells.reduce((s, r) => s + (Number(r.payment) || 0), 0);
     return {
       totalMoney: erp.effectiveMoney,
       sellMoney: sellMoney,
