@@ -10,7 +10,15 @@ async function main() {
   });
   const sells = await sellsRes.json();
   console.log("Sells records in DB count:", sells.length);
-  console.log("Sells records in DB:", sells);
+  
+  const settingsRes = await fetch(`${SUPABASE_URL}/rest/v1/settings?select=*`, {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`
+    }
+  });
+  const settings = await settingsRes.json();
+  console.log("Settings records in DB:", settings);
 }
 
 main().catch(console.error);
