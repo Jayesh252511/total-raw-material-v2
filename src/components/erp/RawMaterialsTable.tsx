@@ -54,7 +54,7 @@ export function RawMaterialsTable({ rows, readOnly, onChanged }: Props) {
         if (s) await supabase.from("settings").update({ total_money: Number(s.total_money) - delta }).eq("id", 1);
       }
     }
-    await logAudit("updated", "raw_material", row.id, { field, before, after: { [field]: patch[field] } });
+    await logAudit("updated", "raw_material", row.id, { field, before, after: { [field]: patch[field] }, row: { ...row, [field]: patch[field] } });
     await onChanged?.();
   }
 

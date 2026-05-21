@@ -15,7 +15,7 @@ export const Route = createFileRoute("/history")({
 function HistoryPage() {
   return (
     <ERPPageFrame showSummary={false} showAlerts={false}>
-      {({ auditLogs }) => <AuditLogPanel logs={auditLogs} />}
+      {({ auditLogs, sells, expenses, rawMaterials }) => <AuditLogPanel logs={auditLogs} sells={sells} expenses={expenses} rawMaterials={rawMaterials} />}
     </ERPPageFrame>
   );
 }

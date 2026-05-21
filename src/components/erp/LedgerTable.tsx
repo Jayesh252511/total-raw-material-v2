@@ -106,7 +106,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
       const delta = (Number(value) || 0) - Number(row.payment || 0);
       if (delta !== 0) await adjustMoney(delta);
     }
-    await logAudit("updated", table, row.id, { field, before, after: { [field]: newVal } });
+    await logAudit("updated", table, row.id, { field, before, after: { [field]: newVal }, row: { ...row, [field]: newVal } });
     await onChanged?.();
   }
 

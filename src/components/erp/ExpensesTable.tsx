@@ -54,7 +54,7 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
         if (s) await supabase.from("settings").update({ total_money: Number(s.total_money) - delta }).eq("id", 1);
       }
     }
-    await logAudit("updated", "expense", row.id, { field, before, after: { [field]: newVal } });
+    await logAudit("updated", "expense", row.id, { field, before, after: { [field]: newVal }, row: { ...row, [field]: newVal } });
     await onChanged?.();
   }
 
