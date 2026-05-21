@@ -65,6 +65,8 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
   // Filtered sheet totals (for table footer)
   const totalQty = filtered.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
   const totalGadiBhada = filtered.reduce((s, r) => s + (Number(r.gadi_bhada) || 0), 0);
+  const totalBaseAmount = filtered.reduce((s, r) => s + (Number(r.quantity) || 0) * (Number(r.rate) || 0), 0);
+  const totalGSTAmount = filtered.reduce((s, r) => s + (isSell ? (Number(r.quantity) || 0) * (Number(r.rate) || 0) * SELL_GST_RATE : 0), 0);
   const totalAmount = filtered.reduce((s, r) => s + displayTotal(r), 0);
   const totalWithoutGB = filtered.reduce((s, r) => s + displayWithoutGB(r), 0);
   const totalPayment = filtered.reduce((s, r) => s + (Number(r.payment) || 0), 0);
@@ -136,15 +138,19 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
 
   function exportExcel() {
     const data = filtered.map((r) => {
+      const baseAmt = (Number(r.quantity) || 0) * (Number(r.rate) || 0);
+      const gstAmt = isSell ? baseAmt * SELL_GST_RATE : 0;
       const total = displayTotal(r);
       const without = displayWithoutGB(r);
       const base: Record<string, string | number> = { "Pc No.": r.serial_number, Date: r.entry_date, Name: r.name };
       if (isSell) base["Vehicle No."] = r.vehicle_number || "";
       base.Qty = Number(r.quantity);
       base.Rate = Number(r.rate);
+      if (isSell) base["Total Amount (w/o GST)"] = Number(baseAmt.toFixed(2));
       if (isSell) base["Gadi Bhada"] = Number(r.gadi_bhada || 0);
+      if (isSell) base["GST (₹)"] = Number(gstAmt.toFixed(2));
       base[isSell ? "Total Amount (incl. 5% GST)" : "Amount"] = total;
-      if (isSell) base["Amount w/o Gadi Bhada (incl. 5% GST)"] = without;
+      if (isSell) base["Amount w/o Gadi Bhada (GST)"] = without;
       base.Payment = Number(r.payment);
       base.Difference = isSell ? Number(r.payment) - without : total - Number(r.payment);
       return base;
@@ -158,16 +164,18 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
     const doc = new jsPDF();
     doc.text(`${isSell ? "Sells" : "Raw Material"} Sheet`, 14, 14);
     const head = isSell
-      ? [["Pc", "Date", "Name", "Vehicle", "Qty", "Rate", "Gadi", "Total (GST)", "Amt w/o GB", "Pay", "Diff"]]
+      ? [["Pc", "Date", "Name", "Vehicle", "Qty", "Rate", "Amt (w/o GST)", "Gadi", "GST (₹)", "Total (GST)", "Amt w/o GB", "Pay", "Diff"]]
       : [["Pc", "Date", "Name", "Qty", "Rate", "Amount", "Payment", "Diff"]];
     const body = filtered.map((r) => {
+      const baseAmt = (Number(r.quantity) || 0) * (Number(r.rate) || 0);
+      const gstAmt = isSell ? baseAmt * SELL_GST_RATE : 0;
       const total = displayTotal(r);
       const without = displayWithoutGB(r);
       const diff = isSell ? Number(r.payment) - without : total - Number(r.payment);
-      if (isSell) return [r.serial_number, r.entry_date, r.name, r.vehicle_number || "", Number(r.quantity), Number(r.rate), Number(r.gadi_bhada || 0), total.toFixed(2), without.toFixed(2), Number(r.payment).toFixed(2), diff.toFixed(2)];
+      if (isSell) return [r.serial_number, r.entry_date, r.name, r.vehicle_number || "", Number(r.quantity), Number(r.rate), baseAmt.toFixed(2), Number(r.gadi_bhada || 0), gstAmt.toFixed(2), total.toFixed(2), without.toFixed(2), Number(r.payment).toFixed(2), diff.toFixed(2)];
       return [r.serial_number, r.entry_date, r.name, Number(r.quantity), Number(r.rate), total.toFixed(2), Number(r.payment).toFixed(2), diff.toFixed(2)];
     });
-    autoTable(doc, { startY: 20, styles: { fontSize: 7 }, head, body });
+    autoTable(doc, { startY: 20, styles: { fontSize: 6 }, head, body });
     doc.save(`${mode}-${sheetDate}.pdf`);
   }
 
@@ -344,16 +352,18 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
 
       {/* Desktop table */}
       <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-soft md:block">
-        <table className="w-full text-sm min-w-[820px]">
+        <table className="w-full text-sm min-w-[1100px]">
           <thead className="bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
             <tr>
-              <th className="px-3 py-2.5 text-left font-medium w-16">Pc No.</th>
-              <th className="px-3 py-2.5 text-left font-medium w-32">Date</th>
+              <th className="px-3 py-2.5 text-left font-medium w-14">Pc No.</th>
+              <th className="px-3 py-2.5 text-left font-medium w-28">Date</th>
               <th className="px-3 py-2.5 text-left font-medium">Name</th>
-              {isSell && <th className="px-3 py-2.5 text-left font-medium w-36">Vehicle No.</th>}
-              <th className="px-3 py-2.5 text-right font-medium w-24">Qty</th>
-              <th className="px-3 py-2.5 text-right font-medium w-24">Rate</th>
+              {isSell && <th className="px-3 py-2.5 text-left font-medium w-32">Vehicle No.</th>}
+              <th className="px-3 py-2.5 text-right font-medium w-20">Qty</th>
+              <th className="px-3 py-2.5 text-right font-medium w-20">Rate</th>
+              {isSell && <th className="px-3 py-2.5 text-right font-medium w-32">Total (w/o GST)</th>}
               {isSell && <th className="px-3 py-2.5 text-right font-medium w-28">Gadi Bhada</th>}
+              {isSell && <th className="px-3 py-2.5 text-right font-medium w-24">GST (₹)</th>}
               <th className="px-3 py-2.5 text-right font-medium w-32">Total Amount{isSell ? " (GST)" : ""}</th>
               {isSell && <th className="px-3 py-2.5 text-right font-medium w-36">Amt w/o Gadi Bhada (GST)</th>}
               <th className="px-3 py-2.5 text-right font-medium w-28">Payment</th>
@@ -362,8 +372,10 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={isSell ? 12 : 9} className="py-10 text-center text-sm text-muted-foreground">No entries yet.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={isSell ? 14 : 9} className="py-10 text-center text-sm text-muted-foreground">No entries yet.</td></tr>}
             {filtered.map((r) => {
+              const baseAmt = (Number(r.quantity) || 0) * (Number(r.rate) || 0);
+              const gstAmt = isSell ? baseAmt * SELL_GST_RATE : 0;
               const total = displayTotal(r);
               const without = displayWithoutGB(r);
               const diff = isSell ? Number(r.payment) - without : total - Number(r.payment);
@@ -375,7 +387,9 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                   {isSell && <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.vehicle_number || ""} placeholder="Vehicle no." onBlur={(e) => e.target.value !== (r.vehicle_number || "") && updateField(r, "vehicle_number", e.target.value)} className="cell-input font-mono" /></td>}
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.001" defaultValue={r.quantity} onBlur={(e) => Number(e.target.value) !== Number(r.quantity) && updateField(r, "quantity", e.target.value)} className="cell-input text-right tabular-nums" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.rate} onBlur={(e) => Number(e.target.value) !== Number(r.rate) && updateField(r, "rate", e.target.value)} className="cell-input text-right tabular-nums" /></td>
+                  {isSell && <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{fmtNum(baseAmt, 2)}</td>}
                   {isSell && <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.gadi_bhada || 0} onBlur={(e) => Number(e.target.value) !== Number(r.gadi_bhada || 0) && updateField(r, "gadi_bhada", e.target.value)} className="cell-input text-right tabular-nums" /></td>}
+                  {isSell && <td className="px-3 py-2 text-right tabular-nums text-orange-600 dark:text-orange-400">{fmtNum(gstAmt, 2)}</td>}
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtNum(total, 2)}</td>
                   {isSell && <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtNum(without, 2)}</td>}
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.payment} onBlur={(e) => Number(e.target.value) !== Number(r.payment) && updateField(r, "payment", e.target.value)} className="cell-input text-right tabular-nums" /></td>
@@ -391,7 +405,9 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
               {isSell && <td className="px-3 py-3"></td>}
               <td className="px-3 py-3 text-right tabular-nums text-blue-600 dark:text-blue-400">{fmtNum(totalQty, 3)} t</td>
               <td className="px-3 py-3"></td>
+              {isSell && <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(totalBaseAmount, 2)}</td>}
               {isSell && <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{fmtINR(totalGadiBhada)}</td>}
+              {isSell && <td className="px-3 py-3 text-right tabular-nums text-orange-600 dark:text-orange-400">{fmtNum(totalGSTAmount, 2)}</td>}
               <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalAmount, 2)}</td>
               {isSell && <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalWithoutGB, 2)}</td>}
               <td className="px-3 py-3 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{fmtNum(totalPayment, 2)}</td>
@@ -404,7 +420,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
             </tr>
           </tfoot>
         </table>
-        {isSell && <p className="px-3 py-2 text-[11px] text-muted-foreground border-t">All sell totals include {SELL_GST_RATE * 100}% GST. Total Amount = Qty × Rate × 1.05. Amt w/o Gadi Bhada = Total Amount - Gadi Bhada.</p>}
+        {isSell && <p className="px-3 py-2 text-[11px] text-muted-foreground border-t">Total (w/o GST) = Qty × Rate. GST (₹) = Qty × Rate × {SELL_GST_RATE * 100}%. Total Amount (GST) = Qty × Rate × {1 + SELL_GST_RATE}. Amt w/o Gadi Bhada = Total (GST) − Gadi Bhada.</p>}
       </div>
     </div>
   );
