@@ -3,6 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/integrations/supabase/client";
 import { fmtINR } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Trash2 } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { toast } from "sonner";
 
 export type MoneyLog = {
   id: string;
@@ -24,11 +27,11 @@ type Props = {
 export function MoneyHistoryDialog({ open, onOpenChange, field, title }: Props) {
   const [logs, setLogs] = useState<MoneyLog[]>([]);
   const [loading, setLoading] = useState(false);
+  const { isAdmin } = useAuth();
 
-  useEffect(() => {
-    if (!open) return;
+  const loadLogs = async () => {
     setLoading(true);
-    (async () => {
+    try {
       const { data } = await supabase
         .from("audit_logs")
         .select("id, created_at, details, device_info")
@@ -94,9 +97,55 @@ export function MoneyHistoryDialog({ open, onOpenChange, field, title }: Props) 
         });
       }
       setLogs(out);
+    } catch (err: any) {
+      toast.error("Failed to load history logs");
+    } finally {
       setLoading(false);
-    })();
+    }
+  };
+
+  useEffect(() => {
+    if (open) {
+      loadLogs();
+    }
   }, [open, field]);
+
+  async function handleDelete(log: MoneyLog) {
+    if (!confirm(`Are you sure you want to delete this log entry for ${fmtINR(log.delta)}?\n\nThis will remove the transaction record from history.`)) {
+      return;
+    }
+
+    const revertMoney = confirm(
+      `Do you also want to REVERT the money in Settings?\n\n` +
+      `• Click OK to reverse the transaction's effect: ${log.delta > 0 ? "Deduct" : "Add back"} ${fmtINR(Math.abs(log.delta))} from Settings.\n` +
+      `• Click Cancel to ONLY delete the log (keeps settings balance unchanged, perfect for duplicate logs).`
+    );
+
+    try {
+      if (revertMoney) {
+        const { data: s } = await supabase.from("settings").select("total_money, lock_money").eq("id", 1).single();
+        if (s) {
+          const patch: Record<string, number> = {};
+          if (field === "total_money") {
+            patch.total_money = Number(s.total_money) - log.delta;
+          } else if (field === "lock_money") {
+            patch.lock_money = Number(s.lock_money) - log.delta;
+            patch.total_money = Number(s.total_money) - log.delta;
+          }
+          const { error: patchErr } = await supabase.from("settings").update(patch).eq("id", 1);
+          if (patchErr) throw patchErr;
+        }
+      }
+
+      const { error } = await supabase.from("audit_logs").delete().eq("id", log.id);
+      if (error) throw error;
+
+      toast.success("Transaction log deleted successfully");
+      setLogs((prev) => prev.filter((item) => item.id !== log.id));
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete log");
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -111,7 +160,7 @@ export function MoneyHistoryDialog({ open, onOpenChange, field, title }: Props) 
             {logs.map((l) => {
               const added = l.delta > 0;
               return (
-                <div key={l.id} className="rounded-lg border bg-card p-3">
+                <div key={l.id} className="relative rounded-lg border bg-card p-3 pr-10 group transition-all hover:border-primary/20">
                   <div className="flex items-center justify-between gap-2">
                     <span className={cn("text-sm font-semibold tabular-nums", added ? "text-success" : "text-destructive")}>
                       {added ? "+" : ""}{fmtINR(l.delta)}
@@ -123,6 +172,16 @@ export function MoneyHistoryDialog({ open, onOpenChange, field, title }: Props) 
                   </div>
                   {l.note && <div className="mt-1 text-xs font-medium">📝 {l.note}</div>}
                   {l.device_info && <div className="mt-1 text-[10px] text-muted-foreground truncate">{l.device_info}</div>}
+                  
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleDelete(l)}
+                      title="Delete this history entry"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1.5 text-muted-foreground hover:text-destructive rounded-md hover:bg-destructive/10 cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={2.2} />
+                    </button>
+                  )}
                 </div>
               );
             })}
