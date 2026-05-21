@@ -54,8 +54,22 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
   const yearRows = filtered.filter((r) => r.entry_date.slice(0, 4) === sheetDate.slice(0, 4));
   const dayAmt = dayRows.reduce((s, r) => s + (isSell ? displayWithoutGB(r) : displayTotal(r)), 0);
   const dayQty = dayRows.reduce((s, r) => s + Number(r.quantity), 0);
+  const dayPayment = dayRows.reduce((s, r) => s + (Number(r.payment) || 0), 0);
+  const dayDiff = isSell ? dayPayment - dayAmt : dayAmt - dayPayment;
+
   const yearAmt = yearRows.reduce((s, r) => s + (isSell ? displayWithoutGB(r) : displayTotal(r)), 0);
   const yearQty = yearRows.reduce((s, r) => s + Number(r.quantity), 0);
+  const yearPayment = yearRows.reduce((s, r) => s + (Number(r.payment) || 0), 0);
+  const yearDiff = isSell ? yearPayment - yearAmt : yearAmt - yearPayment;
+
+  // Filtered sheet totals (for table footer)
+  const totalQty = filtered.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+  const totalGadiBhada = filtered.reduce((s, r) => s + (Number(r.gadi_bhada) || 0), 0);
+  const totalAmount = filtered.reduce((s, r) => s + displayTotal(r), 0);
+  const totalWithoutGB = filtered.reduce((s, r) => s + displayWithoutGB(r), 0);
+  const totalPayment = filtered.reduce((s, r) => s + (Number(r.payment) || 0), 0);
+  const totalDifference = isSell ? totalPayment - totalWithoutGB : totalAmount - totalPayment;
+
 
   const [form, setForm] = useState({ entry_date: todayStr(), name: "", rate: "", quantity: "", payment: "", vehicle_number: "", gadi_bhada: "" });
   function resetForm() { setForm({ entry_date: todayStr(), name: "", rate: "", quantity: "", payment: "", vehicle_number: "", gadi_bhada: "" }); }
@@ -243,16 +257,36 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
       </div>
 
       {/* Daily/Yearly cards */}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        {/* Card 1: Amount */}
         <div className="rounded-xl border bg-card p-4 shadow-soft">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Daily Total{isSell ? " (incl. 5% GST)" : ""}</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums">{fmtINR(dayAmt)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Qty: {fmtNum(dayQty, 3)} t</p>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {isSell ? "Total Net Sales (w/o GB)" : "Total Purchase Amount"}
+          </p>
+          <p className="mt-1 text-lg sm:text-2xl font-bold tabular-nums text-primary">{fmtINR(yearAmt)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Daily: {fmtINR(dayAmt)}</p>
         </div>
+        {/* Card 2: Qty */}
         <div className="rounded-xl border bg-card p-4 shadow-soft">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Yearly Total{isSell ? " (incl. 5% GST)" : ""}</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums">{fmtINR(yearAmt)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Qty: {fmtNum(yearQty, 3)} t · {sheetDate.slice(0, 4)}</p>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Total Qty (Volume)</p>
+          <p className="mt-1 text-lg sm:text-2xl font-bold tabular-nums text-blue-600 dark:text-blue-400">{fmtNum(yearQty, 3)} t</p>
+          <p className="mt-1 text-xs text-muted-foreground">Daily: {fmtNum(dayQty, 3)} t</p>
+        </div>
+        {/* Card 3: Payment */}
+        <div className="rounded-xl border bg-card p-4 shadow-soft">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Payment Received</p>
+          <p className="mt-1 text-lg sm:text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{fmtINR(yearPayment)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Daily: {fmtINR(dayPayment)}</p>
+        </div>
+        {/* Card 4: Difference */}
+        <div className="rounded-xl border bg-card p-4 shadow-soft">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Outstanding Balance</p>
+          <p className={`mt-1 text-lg sm:text-2xl font-bold tabular-nums ${
+            yearDiff === 0 ? "text-emerald-600 dark:text-emerald-400" : yearDiff > 0 ? "text-destructive" : "text-amber-600"
+          }`}>
+            {fmtINR(yearDiff)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Daily: {fmtINR(dayDiff)}</p>
         </div>
       </div>
 
@@ -351,6 +385,24 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
               );
             })}
           </tbody>
+          <tfoot>
+            <tr className="border-t bg-muted/40 font-bold text-xs">
+              <td className="px-3 py-3 font-semibold text-muted-foreground" colSpan={3}>Sheet Totals ({filtered.length} entries)</td>
+              {isSell && <td className="px-3 py-3"></td>}
+              <td className="px-3 py-3 text-right tabular-nums text-blue-600 dark:text-blue-400">{fmtNum(totalQty, 3)} t</td>
+              <td className="px-3 py-3"></td>
+              {isSell && <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{fmtINR(totalGadiBhada)}</td>}
+              <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalAmount, 2)}</td>
+              {isSell && <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalWithoutGB, 2)}</td>}
+              <td className="px-3 py-3 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{fmtNum(totalPayment, 2)}</td>
+              <td className={`px-3 py-3 text-right tabular-nums ${
+                totalDifference === 0 ? "text-emerald-600 dark:text-emerald-400" : totalDifference > 0 ? "text-destructive" : "text-amber-600"
+              }`}>
+                {fmtNum(totalDifference, 2)}
+              </td>
+              {!readOnly && <td></td>}
+            </tr>
+          </tfoot>
         </table>
         {isSell && <p className="px-3 py-2 text-[11px] text-muted-foreground border-t">All sell totals include {SELL_GST_RATE * 100}% GST. Total Amount = Qty × Rate × 1.05. Amt w/o Gadi Bhada = Total Amount - Gadi Bhada.</p>}
       </div>

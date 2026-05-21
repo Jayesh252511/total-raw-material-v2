@@ -32,6 +32,7 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
 
   const todayTot = filtered.filter((r) => isToday(r.entry_date)).reduce((s, r) => s + Number(r.amount), 0);
   const yearTot = filtered.filter((r) => isThisYear(r.entry_date)).reduce((s, r) => s + Number(r.amount), 0);
+  const totalAmount = filtered.reduce((s, r) => s + Number(r.amount || 0), 0);
 
   async function addRow() {
     const { data, error } = await supabase.from("expenses").insert({ entry_date: todayStr(), category: tab }).select().single();
@@ -145,6 +146,13 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t bg-muted/40 font-bold text-xs">
+                <td className="px-3 py-3 font-semibold text-muted-foreground" colSpan={3}>Sheet Totals ({filtered.length} entries)</td>
+                <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtINR(totalAmount)}</td>
+                {!readOnly && <td></td>}
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
