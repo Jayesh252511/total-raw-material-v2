@@ -160,7 +160,7 @@ export function MoneyHistoryDialog({ open, onOpenChange, field, title }: Props) 
             {logs.map((l) => {
               const added = l.delta > 0;
               return (
-                <div key={l.id} className="relative rounded-lg border bg-card p-3 pr-10 group transition-all hover:border-primary/20">
+                <div key={l.id} className="relative rounded-lg border bg-card p-3 pr-11 transition-all hover:border-primary/20">
                   <div className="flex items-center justify-between gap-2">
                     <span className={cn("text-sm font-semibold tabular-nums", added ? "text-success" : "text-destructive")}>
                       {added ? "+" : ""}{fmtINR(l.delta)}
@@ -177,9 +177,9 @@ export function MoneyHistoryDialog({ open, onOpenChange, field, title }: Props) 
                     <button
                       onClick={() => handleDelete(l)}
                       title="Delete this history entry"
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1.5 text-muted-foreground hover:text-destructive rounded-md hover:bg-destructive/10 cursor-pointer"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-destructive rounded-md hover:bg-destructive/10 cursor-pointer transition-colors"
                     >
-                      <Trash2 className="h-3.5 w-3.5" strokeWidth={2.2} />
+                      <Trash2 className="h-4 w-4" strokeWidth={2.2} />
                     </button>
                   )}
                 </div>
