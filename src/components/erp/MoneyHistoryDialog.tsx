@@ -125,14 +125,14 @@ export function MoneyHistoryDialog({ open, onOpenChange, field, title }: Props) 
       if (revertMoney) {
         const { data: s } = await supabase.from("settings").select("total_money, lock_money").eq("id", 1).single();
         if (s) {
-          const patch: Record<string, number> = {};
+          const patch: { total_money?: number; lock_money?: number } = {};
           if (field === "total_money") {
             patch.total_money = Number(s.total_money) - log.delta;
           } else if (field === "lock_money") {
             patch.lock_money = Number(s.lock_money) - log.delta;
             patch.total_money = Number(s.total_money) - log.delta;
           }
-          const { error: patchErr } = await supabase.from("settings").update(patch).eq("id", 1);
+          const { error: patchErr } = await supabase.from("settings").update(patch as any).eq("id", 1);
           if (patchErr) throw patchErr;
         }
       }
