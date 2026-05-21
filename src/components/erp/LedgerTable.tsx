@@ -52,9 +52,9 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
 
   const dayRows = filtered.filter((r) => r.entry_date === sheetDate);
   const yearRows = filtered.filter((r) => r.entry_date.slice(0, 4) === sheetDate.slice(0, 4));
-  const dayAmt = dayRows.reduce((s, r) => s + displayTotal(r), 0);
+  const dayAmt = dayRows.reduce((s, r) => s + (isSell ? displayWithoutGB(r) : displayTotal(r)), 0);
   const dayQty = dayRows.reduce((s, r) => s + Number(r.quantity), 0);
-  const yearAmt = yearRows.reduce((s, r) => s + displayTotal(r), 0);
+  const yearAmt = yearRows.reduce((s, r) => s + (isSell ? displayWithoutGB(r) : displayTotal(r)), 0);
   const yearQty = yearRows.reduce((s, r) => s + Number(r.quantity), 0);
 
   const [form, setForm] = useState({ entry_date: todayStr(), name: "", rate: "", quantity: "", payment: "", vehicle_number: "", gadi_bhada: "" });
@@ -186,7 +186,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                   <div className="rounded-md bg-muted/40 p-3 text-sm">
                     <div className="flex justify-between"><span className="text-muted-foreground">Entries</span><span className="font-semibold">{filtered.length}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Total Qty</span><span className="font-semibold tabular-nums">{fmtNum(filtered.reduce((s, r) => s + Number(r.quantity), 0), 3)} t</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Total Amount{isSell ? " (incl. GST)" : ""}</span><span className="font-semibold tabular-nums">{fmtINR(filtered.reduce((s, r) => s + displayTotal(r), 0))}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Total Net Amount{isSell ? " (incl. GST)" : ""}</span><span className="font-semibold tabular-nums">{fmtINR(filtered.reduce((s, r) => s + (isSell ? displayWithoutGB(r) : displayTotal(r)), 0))}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Total Payment</span><span className="font-semibold tabular-nums">{fmtINR(filtered.reduce((s, r) => s + Number(r.payment), 0))}</span></div>
                   </div>
                 )}
