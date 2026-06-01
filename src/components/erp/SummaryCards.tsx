@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { TrendingUp, TrendingDown, Wallet, Package, Receipt, Wrench, Calendar, CalendarDays, ShoppingCart, Lock } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, Package, Receipt, Wrench, Calendar, CalendarDays, ShoppingCart, Lock, Coins } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { fmtINR, fmtTons } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -53,6 +53,7 @@ function Card({ s }: { s: Stat }) {
 type Props = {
   totalMoney: number;
   sellMoney: number;
+  sellWithoutGBNoGST: number;
   lockMoney: number;
   totalStock: number;
   todayExpense: number;
@@ -70,6 +71,7 @@ export function SummaryCards(p: Props) {
   const stats: Stat[] = [
     { label: "Total Money", value: fmtINR(p.totalMoney), icon: Wallet, tone: "primary", hint: "Tap for history", onClick: () => setOpenTotal(true) },
     { label: "Sell Received", value: fmtINR(p.sellMoney), icon: ShoppingCart, tone: "success", hint: "Total payment received from sells" },
+    { label: "Amt w/o GB (w/o GST)", value: fmtINR(p.sellWithoutGBNoGST), icon: Coins, tone: "success", hint: "Sell total without Gadi Bhada or GST" },
     { label: "Lock Amount", value: fmtINR(p.lockMoney), icon: Lock, tone: "warning", hint: "Add-only · tap for history", onClick: () => setOpenLock(true) },
     { label: "Total Stock", value: fmtTons(p.totalStock), icon: Package, tone: "info" },
     { label: "Yearly Raw Material", value: fmtINR(p.yearRM), icon: Package, tone: "info" },

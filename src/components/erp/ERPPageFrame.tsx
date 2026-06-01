@@ -27,9 +27,11 @@ export function ERPPageFrame({ children, showSummary = true, showAlerts = true }
     const yearTons = erp.pcEntries.filter((r) => isThisYear(r.entry_date)).reduce((s, r) => s + Number(r.qty), 0);
     // Sell Money on dashboard = Sell Payment Received
     const sellMoney = erp.sells.reduce((s, r) => s + (Number(r.payment) || 0), 0);
+    const sellWithoutGBNoGST = erp.sells.reduce((s, r) => s + ((Number(r.quantity) || 0) * (Number(r.rate) || 0) - (Number(r.gadi_bhada) || 0)), 0);
     return {
       totalMoney: erp.effectiveMoney,
       sellMoney: sellMoney,
+      sellWithoutGBNoGST,
       lockMoney: erp.settings.lock_money,
       totalStock: erp.totalStock,
       todayExpense: todayMaint + todayRM,
