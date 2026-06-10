@@ -1,18 +1,39 @@
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { RawMaterial, Expense, Sell, Settings } from "@/lib/erpStore";
+import type { PcEntry, Expense, Sell, Settings } from "@/lib/erpStore";
 import { todayStr, SELL_GST_RATE, withGst } from "@/lib/format";
 
-// Clean number formatting for PDF and Excel summary fields (avoiding unicode characters like ₹)
+// Clean number formatting for PDF and Excel summary fields (avoiding Unicode rupee symbols to prevent PDF rendering bugs)
 const formatCurrency = (n: number) => 
   "Rs. " + new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number.isFinite(n) ? n : 0);
 
 const formatQty = (n: number) => 
   new Intl.NumberFormat("en-IN", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(Number.isFinite(n) ? n : 0) + " t";
 
+// Reusable column auto-fit helper for Excel worksheets
+function autoFitColumns(ws: XLSX.WorkSheet) {
+  if (!ws || !ws["!ref"]) return;
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+  const cols = [];
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    let maxLen = 12; // Min width in characters
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c })];
+      if (cell && cell.v !== undefined && cell.v !== null) {
+        const valStr = String(cell.v);
+        if (valStr.length > maxLen) {
+          maxLen = valStr.length;
+        }
+      }
+    }
+    cols.push({ wch: maxLen + 3 }); // Padding
+  }
+  ws["!cols"] = cols;
+}
+
 export function exportToExcel(
-  rm: RawMaterial[],
+  rm: PcEntry[],
   sells: Sell[],
   ex: Expense[],
   settings: Settings,
@@ -45,8 +66,8 @@ export function exportToExcel(
     ["Total Lock Amount", Number(settings.lock_money)],
     [""],
     ["REPORT PERIOD STATISTICS", ""],
-    ["Total Materials Purchased (tons)", Number(rm.reduce((s, r) => s + (Number(r.quantity) || 0), 0).toFixed(3))],
-    ["Total Purchases Spend", Number(rm.reduce((s, r) => s + (Number(r.total_amount) || 0), 0).toFixed(2))],
+    ["Total Materials Purchased (tons)", Number(rm.reduce((s, r) => s + (Number(r.qty) || 0), 0).toFixed(3))],
+    ["Total Purchases Spend", Number(rm.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0).toFixed(2))],
     ["Total Sales Volume (tons)", Number(sells.reduce((s, r) => s + (Number(r.quantity) || 0), 0).toFixed(3))],
     ["Total Sales Invoice Value (GST incl.)", Number(sells.reduce((s, r) => s + withGst((Number(r.quantity) || 0) * (Number(r.rate) || 0)), 0).toFixed(2))],
     ["Total Net Sales Revenue (w/o Gadi Bhada)", Number(sells.reduce((s, r) => s + (withGst((Number(r.quantity) || 0) * (Number(r.rate) || 0)) - (Number(r.gadi_bhada) || 0)), 0).toFixed(2))],
@@ -54,21 +75,27 @@ export function exportToExcel(
     ["Total Maintenance Spend", Number(ex.reduce((s, r) => s + (Number(r.amount) || 0), 0).toFixed(2))],
   ];
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+  autoFitColumns(summarySheet);
   XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
 
-  // 2. Raw Materials Sheet
+  // 2. Raw Materials Sheet (mapping PcEntry)
   const rmSheet = XLSX.utils.json_to_sheet(
-    rm.map((r) => ({
-      "S.No": r.serial_number,
-      Date: r.entry_date,
-      "Supplier Name": r.name,
-      "Rate (Rs./t)": Number(r.rate),
-      "Quantity (t)": Number(r.quantity),
-      "Total Amount (Rs.)": Number(r.total_amount),
-      "Payment (Rs.)": Number(r.payment),
-      "Difference (Rs.)": Number(r.total_amount) - Number(r.payment),
-    }))
+    rm.map((r) => {
+      const totalAmt = (Number(r.qty) || 0) * (Number(r.rate) || 0);
+      const pay = Number(r.payment) || 0;
+      return {
+        "Pc No.": r.pc_no,
+        Date: r.entry_date,
+        "Supplier Name": r.name,
+        "Rate (Rs./t)": Number(r.rate),
+        "Quantity (t)": Number(r.qty),
+        "Total Amount (Rs.)": Number(totalAmt.toFixed(2)),
+        "Payment (Rs.)": pay,
+        "Difference (Rs.)": Number((totalAmt - pay).toFixed(2)),
+      };
+    })
   );
+  autoFitColumns(rmSheet);
   XLSX.utils.book_append_sheet(wb, rmSheet, "Raw Materials");
 
   // 3. Sells Sheet
@@ -95,6 +122,7 @@ export function exportToExcel(
       };
     })
   );
+  autoFitColumns(sellsSheet);
   XLSX.utils.book_append_sheet(wb, sellsSheet, "Sells");
 
   // 4. Maintenance Sheet
@@ -107,6 +135,7 @@ export function exportToExcel(
       "Amount (Rs.)": Number(e.amount),
     }))
   );
+  autoFitColumns(exSheet);
   XLSX.utils.book_append_sheet(wb, exSheet, "Maintenance");
 
   // Write and Save
@@ -115,7 +144,7 @@ export function exportToExcel(
 }
 
 export function exportToPDF(
-  rm: RawMaterial[],
+  rm: PcEntry[],
   sells: Sell[],
   ex: Expense[],
   settings: Settings,
@@ -153,8 +182,9 @@ export function exportToPDF(
   doc.setLineWidth(0.5);
   doc.line(14, 38, w - 14, 38);
 
-  // Filtered/Period Statistics
-  const rmSpend = rm.reduce((s, r) => s + Number(r.total_amount), 0);
+  // Filtered/Period Statistics mapping PcEntry fields
+  const rmSpend = rm.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0);
+  const rmQty = rm.reduce((s, r) => s + (Number(r.qty) || 0), 0);
   const salesQty = sells.reduce((s, r) => s + Number(r.quantity), 0);
   const salesRevenue = sells.reduce((s, r) => s + withGst((Number(r.quantity) || 0) * (Number(r.rate) || 0)), 0);
   const maintSpend = ex.reduce((s, r) => s + Number(r.amount), 0);
@@ -166,6 +196,7 @@ export function exportToPDF(
     head: [["Performance Metrics", "Report Value"]],
     body: [
       ["Report Period Purchases Spend", formatCurrency(rmSpend)],
+      ["Report Period Purchases Volume", formatQty(rmQty)],
       ["Report Period Sales Volume", formatQty(salesQty)],
       ["Report Period Gross Sales Revenue", formatCurrency(salesRevenue)],
       ["Report Period Transport Spend (Gadi Bhada)", formatCurrency(totalGadiBhada)],
@@ -175,7 +206,7 @@ export function exportToPDF(
     ],
     theme: "grid",
     headStyles: { fillColor: [30, 41, 59], textColor: 255, fontSize: 10, fontStyle: "bold" },
-    styles: { fontSize: 9.5, cellPadding: 2.5 },
+    styles: { fontSize: 9.5, cellPadding: 3, lineColor: [226, 232, 240], lineWidth: 0.5 },
   });
 
   // --- RAW MATERIALS SECTION ---
@@ -184,23 +215,23 @@ export function exportToPDF(
   doc.setTextColor(15, 23, 42); // Slate-900
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const afterSummaryY = (doc as any).lastAutoTable.finalY + 12;
-  doc.text("1. Raw Materials Purchased", 14, afterSummaryY);
+  doc.text("1. Raw Materials (Daily PC Entries)", 14, afterSummaryY);
 
   autoTable(doc, {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     startY: afterSummaryY + 4,
-    head: [["#", "Date", "Supplier Name", "Rate (Rs/t)", "Qty (t)", "Total (Rs.)"]],
+    head: [["Pc No.", "Date", "Supplier Name", "Rate (Rs/t)", "Qty (t)", "Total (Rs.)"]],
     body: rm.map((r) => [
-      r.serial_number,
+      r.pc_no,
       r.entry_date,
       r.name,
       new Intl.NumberFormat("en-IN").format(Number(r.rate)),
-      Number(r.quantity).toFixed(3),
-      new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(Number(r.total_amount)),
+      Number(r.qty).toFixed(3),
+      new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(Number(r.qty) * Number(r.rate)),
     ]),
-    theme: "striped",
+    theme: "grid",
     headStyles: { fillColor: [47, 73, 117], textColor: 255, fontSize: 9 },
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8.5, cellPadding: 2.5, lineColor: [226, 232, 240], lineWidth: 0.5 },
   });
 
   // --- SELLS / SALES SECTION ---
@@ -229,9 +260,9 @@ export function exportToPDF(
         new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(diff),
       ];
     }),
-    theme: "striped",
+    theme: "grid",
     headStyles: { fillColor: [15, 118, 110], textColor: 255, fontSize: 9 }, // Modern teal for sells
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8.5, cellPadding: 2.5, lineColor: [226, 232, 240], lineWidth: 0.5 },
   });
 
   // --- MAINTENANCE / EXPENSES SECTION ---
@@ -239,7 +270,7 @@ export function exportToPDF(
   const afterSellsY = (doc as any).lastAutoTable.finalY + 12;
   
   // Decide whether to add page or render below sells
-  if (afterSellsY > 230) {
+  if (afterSellsY > 220) {
     doc.addPage();
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
@@ -254,9 +285,9 @@ export function exportToPDF(
         e.category.replace("_", " "),
         new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(Number(e.amount)),
       ]),
-      theme: "striped",
-      headStyles: { fillColor: [162, 28, 175], textColor: 255, fontSize: 9 },
-      styles: { fontSize: 8, cellPadding: 2 },
+      theme: "grid",
+      headStyles: { fillColor: [180, 83, 9], textColor: 255, fontSize: 9 }, // Amber header
+      styles: { fontSize: 8.5, cellPadding: 2.5, lineColor: [226, 232, 240], lineWidth: 0.5 },
     });
   } else {
     doc.setFont("helvetica", "bold");
@@ -272,9 +303,9 @@ export function exportToPDF(
         e.category.replace("_", " "),
         new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(Number(e.amount)),
       ]),
-      theme: "striped",
+      theme: "grid",
       headStyles: { fillColor: [180, 83, 9], textColor: 255, fontSize: 9 }, // Amber header
-      styles: { fontSize: 8, cellPadding: 2 },
+      styles: { fontSize: 8.5, cellPadding: 2.5, lineColor: [226, 232, 240], lineWidth: 0.5 },
     });
   }
 

@@ -9,7 +9,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Expense, RawMaterial, Sell, Settings } from "@/lib/erpStore";
+import type { Expense, PcEntry, Sell, Settings } from "@/lib/erpStore";
 import { ExportDialog } from "@/components/erp/ExportDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { logAudit } from "@/lib/audit";
@@ -21,7 +21,7 @@ type Props = {
   settings: Settings;
   effectiveMoney: number;
   readOnly: boolean;
-  rawMaterials: RawMaterial[];
+  rawMaterials: PcEntry[];
   sells: Sell[];
   expenses: Expense[];
   totalStock: number;

@@ -27,7 +27,7 @@ function ERPDashboard() {
 
   return (
     <ERPPageFrame>
-      {({ rawMaterials, sells, expenses, settings, auditLogs, totalStock, effectiveMoney }) => (
+      {({ pcEntries, sells, expenses, settings, auditLogs, totalStock, effectiveMoney }) => (
         <div className="space-y-4">
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
             <QuickLink to="/pc-entries" icon={Boxes} title="Raw Material" subtitle="Daily PC entries · money out" />
@@ -44,13 +44,13 @@ function ERPDashboard() {
               <Download className="h-4 w-4" /> PDF
             </Button>
           </div>
-          <AuditLogPanel logs={auditLogs.slice(0, 8)} sells={sells} expenses={expenses} rawMaterials={rawMaterials} />
+          <AuditLogPanel logs={auditLogs.slice(0, 8)} sells={sells} expenses={expenses} rawMaterials={pcEntries as any} />
 
           <ExportDialog
             open={exportOpen}
             onOpenChange={setExportOpen}
             defaultFormat={exportFormat}
-            rawMaterials={rawMaterials}
+            rawMaterials={pcEntries}
             sells={sells}
             expenses={expenses}
             settings={settings}

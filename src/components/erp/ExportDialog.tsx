@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { FileSpreadsheet, FileText, Download, Calendar } from "lucide-react";
-import type { RawMaterial, Expense, Sell, Settings } from "@/lib/erpStore";
+import type { PcEntry, Expense, Sell, Settings } from "@/lib/erpStore";
 import { exportToExcel, exportToPDF } from "@/lib/exporters";
 import { todayStr } from "@/lib/format";
 
@@ -13,7 +13,7 @@ type ExportDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultFormat: "excel" | "pdf";
-  rawMaterials: RawMaterial[];
+  rawMaterials: PcEntry[];
   sells: Sell[];
   expenses: Expense[];
   settings: Settings;
