@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { BarChart3, Boxes, Download, History, ReceiptText, ShoppingCart } from "lucide-react";
 import { AuditLogPanel } from "@/components/erp/AuditLogPanel";
 import { ERPPageFrame } from "@/components/erp/ERPPageFrame";
 import { Button } from "@/components/ui/button";
-import { exportToExcel, exportToPDF } from "@/lib/exporters";
+import { ExportDialog } from "@/components/erp/ExportDialog";
 
 export const Route = createFileRoute("/")({
   component: ERPDashboard,
@@ -16,6 +17,14 @@ export const Route = createFileRoute("/")({
 });
 
 function ERPDashboard() {
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"excel" | "pdf">("pdf");
+
+  const handleExport = (fmt: "excel" | "pdf") => {
+    setExportFormat(fmt);
+    setExportOpen(true);
+  };
+
   return (
     <ERPPageFrame>
       {({ rawMaterials, sells, expenses, settings, auditLogs, totalStock, effectiveMoney }) => (
@@ -28,14 +37,26 @@ function ERPDashboard() {
             <QuickLink to="/history" icon={History} title="History" subtitle="Device & location log" />
           </div>
           <div className="grid grid-cols-2 gap-2 md:hidden">
-            <Button variant="outline" onClick={() => exportToExcel(rawMaterials, expenses, settings, totalStock, effectiveMoney)}>
+            <Button variant="outline" onClick={() => handleExport("excel")}>
               <Download className="h-4 w-4" /> Excel
             </Button>
-            <Button variant="outline" onClick={() => exportToPDF(rawMaterials, expenses, settings, totalStock, effectiveMoney)}>
+            <Button variant="outline" onClick={() => handleExport("pdf")}>
               <Download className="h-4 w-4" /> PDF
             </Button>
           </div>
           <AuditLogPanel logs={auditLogs.slice(0, 8)} sells={sells} expenses={expenses} rawMaterials={rawMaterials} />
+
+          <ExportDialog
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+            defaultFormat={exportFormat}
+            rawMaterials={rawMaterials}
+            sells={sells}
+            expenses={expenses}
+            settings={settings}
+            totalStock={totalStock}
+            effectiveMoney={effectiveMoney}
+          />
         </div>
       )}
     </ERPPageFrame>

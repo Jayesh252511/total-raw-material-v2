@@ -9,8 +9,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Expense, RawMaterial, Settings } from "@/lib/erpStore";
-import { exportToExcel, exportToPDF } from "@/lib/exporters";
+import type { Expense, RawMaterial, Sell, Settings } from "@/lib/erpStore";
+import { ExportDialog } from "@/components/erp/ExportDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { logAudit } from "@/lib/audit";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ type Props = {
   effectiveMoney: number;
   readOnly: boolean;
   rawMaterials: RawMaterial[];
+  sells: Sell[];
   expenses: Expense[];
   totalStock: number;
 };
@@ -110,8 +111,15 @@ function AddFundsDialog({ currentMoney, effectiveMoney, currentLock, disabled }:
 
 
 
-export function AppShell({ children, settings, effectiveMoney, readOnly, rawMaterials, expenses, totalStock }: Props) {
+export function AppShell({ children, settings, effectiveMoney, readOnly, rawMaterials, sells, expenses, totalStock }: Props) {
   const pathname = useLocation({ select: (s) => s.pathname });
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"excel" | "pdf">("pdf");
+
+  const handleExport = (fmt: "excel" | "pdf") => {
+    setExportFormat(fmt);
+    setExportOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-background pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0">
@@ -143,10 +151,10 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
 
             <AuthButton />
             <SettingsDialog settings={settings} effectiveMoney={effectiveMoney} disabled={readOnly} />
-            <Button variant="outline" size="sm" onClick={() => exportToExcel(rawMaterials, expenses, settings, totalStock, effectiveMoney)} className="hidden h-8 md:inline-flex">
+            <Button variant="outline" size="sm" onClick={() => handleExport("excel")} className="hidden h-8 md:inline-flex">
               <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={() => exportToPDF(rawMaterials, expenses, settings, totalStock, effectiveMoney)} className="hidden h-8 md:inline-flex">
+            <Button variant="outline" size="sm" onClick={() => handleExport("pdf")} className="hidden h-8 md:inline-flex">
               <FileText className="h-3.5 w-3.5" /> PDF
             </Button>
           </div>
@@ -167,6 +175,18 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
           })}
         </div>
       </nav>
+
+      <ExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        defaultFormat={exportFormat}
+        rawMaterials={rawMaterials}
+        sells={sells}
+        expenses={expenses}
+        settings={settings}
+        totalStock={totalStock}
+        effectiveMoney={effectiveMoney}
+      />
     </div>
   );
 }

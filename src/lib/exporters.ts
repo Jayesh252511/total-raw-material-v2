@@ -1,106 +1,283 @@
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { RawMaterial, Expense, Settings } from "@/lib/erpStore";
-import { fmtINR, todayStr } from "@/lib/format";
+import type { RawMaterial, Expense, Sell, Settings } from "@/lib/erpStore";
+import { todayStr, SELL_GST_RATE, withGst } from "@/lib/format";
 
-export function exportToExcel(rm: RawMaterial[], ex: Expense[], settings: Settings, totalStock: number, effectiveMoney: number) {
+// Clean number formatting for PDF and Excel summary fields (avoiding unicode characters like ₹)
+const formatCurrency = (n: number) => 
+  "Rs. " + new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number.isFinite(n) ? n : 0);
+
+const formatQty = (n: number) => 
+  new Intl.NumberFormat("en-IN", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(Number.isFinite(n) ? n : 0) + " t";
+
+export function exportToExcel(
+  rm: RawMaterial[],
+  sells: Sell[],
+  ex: Expense[],
+  settings: Settings,
+  totalStock: number,
+  effectiveMoney: number,
+  range: "today" | "full" | "custom",
+  startDate?: string,
+  endDate?: string
+) {
   const wb = XLSX.utils.book_new();
-  const summary = [
-    ["ERP Summary Report", ""],
-    ["Generated", new Date().toLocaleString("en-IN")],
-    [""],
-    ["Total Money Available", effectiveMoney],
-    ["Total Stock (tons)", totalStock],
-    ["Stock Adjustment (tons)", Number(settings.stock_adjustment)],
-    ["Total Raw Material Entries", rm.length],
-    ["Total Expense Entries", ex.length],
-    ["Total Raw Material Spend", rm.reduce((s, r) => s + Number(r.total_amount), 0)],
-    ["Total Maintenance Spend", ex.reduce((s, r) => s + Number(r.amount), 0)],
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "Summary");
 
+  // Create range label
+  let rangeLabel = "Full History (From Start)";
+  if (range === "today") {
+    rangeLabel = `Today (${new Date().toLocaleDateString("en-IN")})`;
+  } else if (range === "custom" && startDate && endDate) {
+    rangeLabel = `${startDate.split("-").reverse().join("/")} to ${endDate.split("-").reverse().join("/")}`;
+  }
+
+  // 1. Summary Sheet
+  const summaryData = [
+    ["Ledger ERP Business Report", ""],
+    ["Report Period", rangeLabel],
+    ["Generated On", new Date().toLocaleString("en-IN")],
+    [""],
+    ["CURRENT LIVE STATUS", ""],
+    ["Current Net Money (Available)", Number(effectiveMoney.toFixed(2))],
+    ["Current Stock Inventory (tons)", Number(totalStock.toFixed(3))],
+    ["Stock Adjustment Offset (tons)", Number(settings.stock_adjustment)],
+    ["Total Lock Amount", Number(settings.lock_money)],
+    [""],
+    ["REPORT PERIOD STATISTICS", ""],
+    ["Total Materials Purchased (tons)", Number(rm.reduce((s, r) => s + (Number(r.quantity) || 0), 0).toFixed(3))],
+    ["Total Purchases Spend", Number(rm.reduce((s, r) => s + (Number(r.total_amount) || 0), 0).toFixed(2))],
+    ["Total Sales Volume (tons)", Number(sells.reduce((s, r) => s + (Number(r.quantity) || 0), 0).toFixed(3))],
+    ["Total Sales Invoice Value (GST incl.)", Number(sells.reduce((s, r) => s + withGst((Number(r.quantity) || 0) * (Number(r.rate) || 0)), 0).toFixed(2))],
+    ["Total Net Sales Revenue (w/o Gadi Bhada)", Number(sells.reduce((s, r) => s + (withGst((Number(r.quantity) || 0) * (Number(r.rate) || 0)) - (Number(r.gadi_bhada) || 0)), 0).toFixed(2))],
+    ["Total Transport Costs (Gadi Bhada)", Number(sells.reduce((s, r) => s + (Number(r.gadi_bhada) || 0), 0).toFixed(2))],
+    ["Total Maintenance Spend", Number(ex.reduce((s, r) => s + (Number(r.amount) || 0), 0).toFixed(2))],
+  ];
+  const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+  XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
+
+  // 2. Raw Materials Sheet
   const rmSheet = XLSX.utils.json_to_sheet(
     rm.map((r) => ({
       "S.No": r.serial_number,
       Date: r.entry_date,
-      Name: r.name,
-      "Rate (₹/t)": Number(r.rate),
+      "Supplier Name": r.name,
+      "Rate (Rs./t)": Number(r.rate),
       "Quantity (t)": Number(r.quantity),
-      "Total (₹)": Number(r.total_amount),
-    })),
+      "Total Amount (Rs.)": Number(r.total_amount),
+      "Payment (Rs.)": Number(r.payment),
+      "Difference (Rs.)": Number(r.total_amount) - Number(r.payment),
+    }))
   );
   XLSX.utils.book_append_sheet(wb, rmSheet, "Raw Materials");
 
+  // 3. Sells Sheet
+  const sellsSheet = XLSX.utils.json_to_sheet(
+    sells.map((s) => {
+      const baseAmt = (Number(s.quantity) || 0) * (Number(s.rate) || 0);
+      const gstAmt = baseAmt * SELL_GST_RATE;
+      const totalGST = withGst(baseAmt);
+      const netWithoutGB = totalGST - (Number(s.gadi_bhada) || 0);
+      return {
+        "S.No": s.serial_number,
+        Date: s.entry_date,
+        "Client Name": s.name,
+        "Vehicle Number": s.vehicle_number || "—",
+        "Quantity (t)": Number(s.quantity),
+        "Rate (Rs./t)": Number(s.rate),
+        "Total (w/o GST) (Rs.)": Number(baseAmt.toFixed(2)),
+        "Gadi Bhada (Rs.)": Number(s.gadi_bhada || 0),
+        "GST (5%) (Rs.)": Number(gstAmt.toFixed(2)),
+        "Total Amount (GST incl.) (Rs.)": Number(totalGST.toFixed(2)),
+        "Amt w/o Gadi Bhada (GST) (Rs.)": Number(netWithoutGB.toFixed(2)),
+        "Payment Received (Rs.)": Number(s.payment),
+        "Outstanding Balance (Rs.)": Number(s.payment) - netWithoutGB,
+      };
+    })
+  );
+  XLSX.utils.book_append_sheet(wb, sellsSheet, "Sells");
+
+  // 4. Maintenance Sheet
   const exSheet = XLSX.utils.json_to_sheet(
-    ex.map((r) => ({
-      "S.No": r.serial_number,
-      Date: r.entry_date,
-      "Expense Name": r.name,
-      "Amount (₹)": Number(r.amount),
-    })),
+    ex.map((e) => ({
+      "S.No": e.serial_number,
+      Date: e.entry_date,
+      "Expense Name": e.name,
+      Category: e.category.replace("_", " "),
+      "Amount (Rs.)": Number(e.amount),
+    }))
   );
   XLSX.utils.book_append_sheet(wb, exSheet, "Maintenance");
 
-  XLSX.writeFile(wb, `erp-report-${todayStr()}.xlsx`);
+  // Write and Save
+  const cleanRangeName = range === "custom" ? "custom-range" : range;
+  XLSX.writeFile(wb, `ledger-erp-report-${cleanRangeName}-${todayStr()}.xlsx`);
 }
 
-export function exportToPDF(rm: RawMaterial[], ex: Expense[], settings: Settings, totalStock: number, effectiveMoney: number) {
-  const doc = new jsPDF();
+export function exportToPDF(
+  rm: RawMaterial[],
+  sells: Sell[],
+  ex: Expense[],
+  settings: Settings,
+  totalStock: number,
+  effectiveMoney: number,
+  range: "today" | "full" | "custom",
+  startDate?: string,
+  endDate?: string
+) {
+  const doc = new jsPDF({ orientation: "portrait" });
   const w = doc.internal.pageSize.getWidth();
 
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.text("ERP Business Report", w / 2, 18, { align: "center" });
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(120);
-  doc.text(`Generated: ${new Date().toLocaleString("en-IN")}`, w / 2, 25, { align: "center" });
+  // Range Label formatting
+  let rangeLabel = "Full History (From Start)";
+  if (range === "today") {
+    rangeLabel = `Today (${new Date().toLocaleDateString("en-IN")})`;
+  } else if (range === "custom" && startDate && endDate) {
+    rangeLabel = `${startDate.split("-").reverse().join("/")} to ${endDate.split("-").reverse().join("/")}`;
+  }
 
-  doc.setTextColor(20);
+  // --- COVER & SUMMARY SECTION ---
+  doc.setFontSize(22);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 41, 59); // Slate-800
+  doc.text("LEDGER ERP BUSINESS REPORT", w / 2, 22, { align: "center" });
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 116, 139); // Slate-500
+  doc.text(`Period: ${rangeLabel}`, w / 2, 29, { align: "center" });
+  doc.text(`Generated: ${new Date().toLocaleString("en-IN")}`, w / 2, 34, { align: "center" });
+
+  // Draw separator line
+  doc.setDrawColor(226, 232, 240); // Slate-200
+  doc.setLineWidth(0.5);
+  doc.line(14, 38, w - 14, 38);
+
+  // Filtered/Period Statistics
+  const rmSpend = rm.reduce((s, r) => s + Number(r.total_amount), 0);
+  const salesQty = sells.reduce((s, r) => s + Number(r.quantity), 0);
+  const salesRevenue = sells.reduce((s, r) => s + withGst((Number(r.quantity) || 0) * (Number(r.rate) || 0)), 0);
+  const maintSpend = ex.reduce((s, r) => s + Number(r.amount), 0);
+  const totalGadiBhada = sells.reduce((s, r) => s + Number(r.gadi_bhada), 0);
+
+  // Executive summary grid
   autoTable(doc, {
-    startY: 32,
-    head: [["Metric", "Value"]],
+    startY: 42,
+    head: [["Performance Metrics", "Report Value"]],
     body: [
-      ["Total Money Available", fmtINR(effectiveMoney)],
-      ["Total Stock", `${totalStock.toFixed(3)} tons`],
-      ["Stock Adjustment", `${Number(settings.stock_adjustment).toFixed(3)} tons`],
-      ["Raw Material Entries", String(rm.length)],
-      ["Expense Entries", String(ex.length)],
-      ["Total RM Spend", fmtINR(rm.reduce((s, r) => s + Number(r.total_amount), 0))],
-      ["Total Maintenance", fmtINR(ex.reduce((s, r) => s + Number(r.amount), 0))],
+      ["Report Period Purchases Spend", formatCurrency(rmSpend)],
+      ["Report Period Sales Volume", formatQty(salesQty)],
+      ["Report Period Gross Sales Revenue", formatCurrency(salesRevenue)],
+      ["Report Period Transport Spend (Gadi Bhada)", formatCurrency(totalGadiBhada)],
+      ["Report Period Maintenance Spend", formatCurrency(maintSpend)],
+      ["Current Available Money (Live Balance)", formatCurrency(effectiveMoney)],
+      ["Current Stock Inventory (Live Volume)", formatQty(totalStock)],
     ],
     theme: "grid",
-    headStyles: { fillColor: [55, 48, 163], textColor: 255, fontSize: 10 },
-    styles: { fontSize: 9 },
+    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontSize: 10, fontStyle: "bold" },
+    styles: { fontSize: 9.5, cellPadding: 2.5 },
   });
 
+  // --- RAW MATERIALS SECTION ---
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(12);
+  doc.setTextColor(15, 23, 42); // Slate-900
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  doc.text("Raw Materials", 14, (doc as any).lastAutoTable.finalY + 10);
+  const afterSummaryY = (doc as any).lastAutoTable.finalY + 12;
+  doc.text("1. Raw Materials Purchased", 14, afterSummaryY);
+
   autoTable(doc, {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    startY: (doc as any).lastAutoTable.finalY + 13,
-    head: [["#", "Date", "Name", "Rate", "Qty (t)", "Total"]],
-    body: rm.map((r) => [r.serial_number, r.entry_date, r.name, fmtINR(Number(r.rate)), Number(r.quantity).toFixed(3), fmtINR(Number(r.total_amount))]),
+    startY: afterSummaryY + 4,
+    head: [["#", "Date", "Supplier Name", "Rate (Rs/t)", "Qty (t)", "Total (Rs.)"]],
+    body: rm.map((r) => [
+      r.serial_number,
+      r.entry_date,
+      r.name,
+      new Intl.NumberFormat("en-IN").format(Number(r.rate)),
+      Number(r.quantity).toFixed(3),
+      new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(Number(r.total_amount)),
+    ]),
     theme: "striped",
-    headStyles: { fillColor: [55, 48, 163], textColor: 255, fontSize: 9 },
-    styles: { fontSize: 8 },
+    headStyles: { fillColor: [47, 73, 117], textColor: 255, fontSize: 9 },
+    styles: { fontSize: 8, cellPadding: 2 },
   });
 
+  // --- SELLS / SALES SECTION ---
   doc.addPage();
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("Maintenance / Expenses", 14, 16);
+  doc.setFontSize(12);
+  doc.text("2. Sales Ledger", 14, 18);
+
   autoTable(doc, {
-    startY: 19,
-    head: [["#", "Date", "Expense", "Amount"]],
-    body: ex.map((r) => [r.serial_number, r.entry_date, r.name, fmtINR(Number(r.amount))]),
+    startY: 22,
+    head: [["#", "Date", "Client Name", "Qty (t)", "Rate", "G.Bhada", "Total (GST)", "Payment", "Balance"]],
+    body: sells.map((s) => {
+      const baseAmt = (Number(s.quantity) || 0) * (Number(s.rate) || 0);
+      const totalGST = withGst(baseAmt);
+      const netWithoutGB = totalGST - (Number(s.gadi_bhada) || 0);
+      const diff = Number(s.payment) - netWithoutGB;
+      return [
+        s.serial_number,
+        s.entry_date,
+        s.name,
+        Number(s.quantity).toFixed(3),
+        new Intl.NumberFormat("en-IN").format(Number(s.rate)),
+        new Intl.NumberFormat("en-IN").format(Number(s.gadi_bhada || 0)),
+        new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(totalGST),
+        new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(Number(s.payment)),
+        new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(diff),
+      ];
+    }),
     theme: "striped",
-    headStyles: { fillColor: [55, 48, 163], textColor: 255, fontSize: 9 },
-    styles: { fontSize: 8 },
+    headStyles: { fillColor: [15, 118, 110], textColor: 255, fontSize: 9 }, // Modern teal for sells
+    styles: { fontSize: 8, cellPadding: 2 },
   });
 
-  doc.save(`erp-report-${todayStr()}.pdf`);
+  // --- MAINTENANCE / EXPENSES SECTION ---
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const afterSellsY = (doc as any).lastAutoTable.finalY + 12;
+  
+  // Decide whether to add page or render below sells
+  if (afterSellsY > 230) {
+    doc.addPage();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("3. Maintenance & Expenses", 14, 18);
+    autoTable(doc, {
+      startY: 22,
+      head: [["#", "Date", "Expense Name", "Category", "Amount (Rs.)"]],
+      body: ex.map((e) => [
+        e.serial_number,
+        e.entry_date,
+        e.name,
+        e.category.replace("_", " "),
+        new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(Number(e.amount)),
+      ]),
+      theme: "striped",
+      headStyles: { fillColor: [162, 28, 175], textColor: 255, fontSize: 9 },
+      styles: { fontSize: 8, cellPadding: 2 },
+    });
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("3. Maintenance & Expenses", 14, afterSellsY);
+    autoTable(doc, {
+      startY: afterSellsY + 4,
+      head: [["#", "Date", "Expense Name", "Category", "Amount (Rs.)"]],
+      body: ex.map((e) => [
+        e.serial_number,
+        e.entry_date,
+        e.name,
+        e.category.replace("_", " "),
+        new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(Number(e.amount)),
+      ]),
+      theme: "striped",
+      headStyles: { fillColor: [180, 83, 9], textColor: 255, fontSize: 9 }, // Amber header
+      styles: { fontSize: 8, cellPadding: 2 },
+    });
+  }
+
+  const cleanRangeName = range === "custom" ? "custom-range" : range;
+  doc.save(`ledger-erp-report-${cleanRangeName}-${todayStr()}.pdf`);
 }
