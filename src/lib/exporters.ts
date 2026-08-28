@@ -117,6 +117,7 @@ export function exportToExcel(
         "GST (5%) (Rs.)": Number(gstAmt.toFixed(2)),
         "Total Amount (GST incl.) (Rs.)": Number(totalGST.toFixed(2)),
         "Amt w/o Gadi Bhada (GST) (Rs.)": Number(netWithoutGB.toFixed(2)),
+        "Manual Amount (Rs.)": Number(s.manual_amount || 0),
         "Payment Received (Rs.)": Number(s.payment),
         "Outstanding Balance (Rs.)": Number(s.payment) - netWithoutGB,
       };
@@ -242,7 +243,7 @@ export function exportToPDF(
 
   autoTable(doc, {
     startY: 22,
-    head: [["#", "Date", "Client Name", "Qty (t)", "Rate", "G.Bhada", "Total (GST)", "Payment", "Balance"]],
+    head: [["#", "Date", "Client Name", "Qty (t)", "Rate", "G.Bhada", "Total (GST)", "Manual Amt", "Payment", "Balance"]],
     body: sells.map((s) => {
       const baseAmt = (Number(s.quantity) || 0) * (Number(s.rate) || 0);
       const totalGST = withGst(baseAmt);
@@ -256,6 +257,7 @@ export function exportToPDF(
         new Intl.NumberFormat("en-IN").format(Number(s.rate)),
         new Intl.NumberFormat("en-IN").format(Number(s.gadi_bhada || 0)),
         new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(totalGST),
+        new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(Number(s.manual_amount || 0)),
         new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(Number(s.payment)),
         new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(diff),
       ];

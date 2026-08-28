@@ -12,6 +12,7 @@ export type RawMaterial = {
   quantity: number;
   total_amount: number;
   payment: number;
+  manual_amount?: number;
 };
 
 export type Sell = RawMaterial & { vehicle_number: string; gadi_bhada: number };
