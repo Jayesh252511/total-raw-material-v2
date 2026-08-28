@@ -13,6 +13,18 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return "";
+  const parts = dateStr.split("-");
+  if (parts.length === 3) {
+    const year = parts[0].slice(-2);
+    const month = parts[1];
+    const day = parts[2];
+    return `${day}-${month}-${year}`;
+  }
+  return dateStr;
+};
+
 type Mode = "purchase" | "sell";
 type Row = RawMaterial & { vehicle_number?: string; gadi_bhada?: number };
 type Props = { rows: Row[]; readOnly: boolean; mode: Mode; onChanged?: () => void | Promise<void> };
@@ -155,8 +167,8 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
       base[isSell ? "Total Amount (incl. 5% GST)" : "Amount"] = total;
       if (isSell) base["Amt w/o Gadi Bhada (w/o GST)"] = Number(withoutGBNoGST.toFixed(2));
       if (isSell) base["Amt w/o Gadi Bhada (GST)"] = without;
-      base["Manual Amount"] = Number(r.manual_amount || 0);
       base.Payment = Number(r.payment);
+      base["Manual Amount"] = Number(r.manual_amount || 0);
       base.Difference = isSell ? Number(r.payment) - without : total - Number(r.payment);
       return base;
     });
@@ -169,8 +181,8 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
     const doc = new jsPDF();
     doc.text(`${isSell ? "Sells" : "Raw Material"} Sheet`, 14, 14);
     const head = isSell
-      ? [["Pc", "Date", "Name", "Qty", "Rate", "Amt (w/o GST)", "Gadi", "GST (₹)", "Total (GST)", "w/o GB w/o GST", "Amt w/o GB", "Manual Amt", "Pay", "Diff"]]
-      : [["Pc", "Date", "Name", "Qty", "Rate", "Amount", "Manual Amt", "Payment", "Diff"]];
+      ? [["Pc", "Date", "Name", "Qty", "Rate", "Amt (w/o GST)", "Gadi", "GST (₹)", "Total (GST)", "w/o GB w/o GST", "Amt w/o GB", "Pay", "Manual Amt", "Diff"]]
+      : [["Pc", "Date", "Name", "Qty", "Rate", "Amount", "Payment", "Manual Amt", "Diff"]];
     const body = filtered.map((r) => {
       const baseAmt = (Number(r.quantity) || 0) * (Number(r.rate) || 0);
       const gstAmt = isSell ? baseAmt * SELL_GST_RATE : 0;
@@ -178,8 +190,8 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
       const total = displayTotal(r);
       const without = displayWithoutGB(r);
       const diff = isSell ? Number(r.payment) - without : total - Number(r.payment);
-      if (isSell) return [r.serial_number, r.entry_date, r.name, Number(r.quantity), Number(r.rate), baseAmt.toFixed(2), Number(r.gadi_bhada || 0), gstAmt.toFixed(2), total.toFixed(2), withoutGBNoGST.toFixed(2), without.toFixed(2), Number(r.manual_amount || 0).toFixed(2), Number(r.payment).toFixed(2), diff.toFixed(2)];
-      return [r.serial_number, r.entry_date, r.name, Number(r.quantity), Number(r.rate), total.toFixed(2), Number(r.manual_amount || 0).toFixed(2), Number(r.payment).toFixed(2), diff.toFixed(2)];
+      if (isSell) return [r.serial_number, r.entry_date, r.name, Number(r.quantity), Number(r.rate), baseAmt.toFixed(2), Number(r.gadi_bhada || 0), gstAmt.toFixed(2), total.toFixed(2), withoutGBNoGST.toFixed(2), without.toFixed(2), Number(r.payment).toFixed(2), Number(r.manual_amount || 0).toFixed(2), diff.toFixed(2)];
+      return [r.serial_number, r.entry_date, r.name, Number(r.quantity), Number(r.rate), total.toFixed(2), Number(r.payment).toFixed(2), Number(r.manual_amount || 0).toFixed(2), diff.toFixed(2)];
     });
     autoTable(doc, { startY: 20, styles: { fontSize: 6 }, head, body });
     doc.save(`${mode}-${sheetDate}.pdf`);
@@ -319,7 +331,7 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                     <span>#</span>
                     <input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input !h-6 !w-16 !px-1 text-xs tabular-nums" />
-                    <span>· {r.entry_date}</span>
+                    <span>· {formatDate(r.entry_date)}</span>
                   </div>
                   <p className="text-sm font-semibold mt-0.5">{r.name || "—"}</p>
                 </div>
@@ -343,11 +355,11 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                 {isSell && (
                   <div className="rounded bg-muted/30 px-2 py-1.5 col-span-2"><span className="block text-[10px] uppercase text-muted-foreground">Amount w/o Gadi Bhada (incl. GST)</span><span className="font-semibold tabular-nums">{fmtINR(without)}</span></div>
                 )}
-                <div className="rounded bg-muted/30 px-2 py-1.5"><span className="block text-[10px] uppercase text-muted-foreground">Manual Amt</span>
-                  <input disabled={readOnly} type="number" step="0.01" defaultValue={r.manual_amount || 0} onBlur={(e) => Number(e.target.value) !== Number(r.manual_amount || 0) && updateField(r, "manual_amount", e.target.value)} className="cell-input text-right tabular-nums !h-8" />
-                </div>
                 <div className="rounded bg-muted/30 px-2 py-1.5"><span className="block text-[10px] uppercase text-muted-foreground">Payment</span>
                   <input disabled={readOnly} type="number" step="0.01" defaultValue={r.payment} onBlur={(e) => Number(e.target.value) !== Number(r.payment) && updateField(r, "payment", e.target.value)} className="cell-input text-right tabular-nums !h-8" />
+                </div>
+                <div className="rounded bg-muted/30 px-2 py-1.5"><span className="block text-[10px] uppercase text-muted-foreground">Manual Amt</span>
+                  <input disabled={readOnly} type="number" step="0.01" defaultValue={r.manual_amount || 0} onBlur={(e) => Number(e.target.value) !== Number(r.manual_amount || 0) && updateField(r, "manual_amount", e.target.value)} className="cell-input text-right tabular-nums !h-8" />
                 </div>
                 <div className={`col-span-2 rounded px-2 py-1.5 flex justify-between ${diff === 0 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : diff > 0 ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-700 dark:text-amber-400"}`}>
                   <span className="text-[10px] uppercase font-medium">Difference</span>
@@ -375,8 +387,8 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
               <th className="px-3 py-2.5 text-right font-medium w-36">Total Amount{isSell ? " (GST)" : ""}</th>
               {isSell && <th className="px-3 py-2.5 text-right font-medium w-36">Amt w/o GB (w/o GST)</th>}
               {isSell && <th className="px-3 py-2.5 text-right font-medium w-36">Amt w/o GB (GST)</th>}
-              <th className="px-3 py-2.5 text-right font-medium w-32">Manual Amt</th>
               <th className="px-3 py-2.5 text-right font-medium w-32">Payment</th>
+              <th className="px-3 py-2.5 text-right font-medium w-32">Manual Amt</th>
               <th className="px-3 py-2.5 text-right font-medium w-32">Difference</th>
               {!readOnly && <th className="w-12"></th>}
             </tr>
@@ -393,7 +405,19 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
               return (
                 <tr key={r.id} className="border-t hover:bg-muted/20">
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input text-left tabular-nums" /></td>
-                  <td className="px-1 py-1"><input disabled={readOnly} type="date" defaultValue={r.entry_date} onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input text-primary" /></td>
+                  <td className="px-1 py-1">
+                    <div className="relative w-full flex items-center px-2 min-h-[36px]">
+                      <span className="text-xs tabular-nums text-primary font-medium pointer-events-none">{formatDate(r.entry_date)}</span>
+                      {!readOnly && (
+                        <input 
+                          type="date" 
+                          defaultValue={r.entry_date} 
+                          onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} 
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+                        />
+                      )}
+                    </div>
+                  </td>
                   <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.name} placeholder="Name" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.001" defaultValue={r.quantity} onBlur={(e) => Number(e.target.value) !== Number(r.quantity) && updateField(r, "quantity", e.target.value)} className="cell-input text-right tabular-nums" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.rate} onBlur={(e) => Number(e.target.value) !== Number(r.rate) && updateField(r, "rate", e.target.value)} className="cell-input text-right tabular-nums" /></td>
@@ -403,8 +427,8 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtNum(total, 2)}</td>
                   {isSell && <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{fmtNum(withoutGBNoGST, 2)}</td>}
                   {isSell && <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtNum(without, 2)}</td>}
-                  <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.manual_amount || 0} onBlur={(e) => Number(e.target.value) !== Number(r.manual_amount || 0) && updateField(r, "manual_amount", e.target.value)} className="cell-input text-right tabular-nums" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.payment} onBlur={(e) => Number(e.target.value) !== Number(r.payment) && updateField(r, "payment", e.target.value)} className="cell-input text-right tabular-nums" /></td>
+                  <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.manual_amount || 0} onBlur={(e) => Number(e.target.value) !== Number(r.manual_amount || 0) && updateField(r, "manual_amount", e.target.value)} className="cell-input text-right tabular-nums" /></td>
                   <td className={`px-3 py-2 text-right font-semibold tabular-nums ${diff === 0 ? "" : diff > 0 ? "text-destructive" : "text-amber-600"}`}>{fmtNum(diff, 2)}</td>
                   {!readOnly && <td className="px-2 py-1"><button onClick={() => deleteRow(r)} className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button></td>}
                 </tr>
@@ -422,8 +446,8 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
               <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalAmount, 2)}</td>
               {isSell && <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(totalWithoutGBNoGST, 2)}</td>}
               {isSell && <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalWithoutGB, 2)}</td>}
-              <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalManualAmount, 2)}</td>
               <td className="px-3 py-3 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{fmtNum(totalPayment, 2)}</td>
+              <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalManualAmount, 2)}</td>
               <td className={`px-3 py-3 text-right tabular-nums ${
                 totalDifference === 0 ? "text-emerald-600 dark:text-emerald-400" : totalDifference > 0 ? "text-destructive" : "text-amber-600"
               }`}>

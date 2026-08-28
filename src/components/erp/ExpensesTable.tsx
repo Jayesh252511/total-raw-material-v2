@@ -8,6 +8,18 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return "";
+  const parts = dateStr.split("-");
+  if (parts.length === 3) {
+    const year = parts[0].slice(-2);
+    const month = parts[1];
+    const day = parts[2];
+    return `${day}-${month}-${year}`;
+  }
+  return dateStr;
+};
+
 type Props = { rows: Expense[]; readOnly: boolean; onChanged?: () => void | Promise<void> };
 
 const CATS: { key: ExpenseCategory; label: string; icon: typeof Fuel }[] = [
@@ -139,7 +151,19 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
               {filtered.map((r) => (
                 <tr key={r.id} className="border-t hover:bg-muted/20">
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input text-left tabular-nums" /></td>
-                  <td className="px-1 py-1"><input disabled={readOnly} type="date" defaultValue={r.entry_date} onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input" /></td>
+                  <td className="px-1 py-1">
+                    <div className="relative w-full flex items-center px-2 min-h-[36px]">
+                      <span className="text-xs tabular-nums text-primary font-medium pointer-events-none">{formatDate(r.entry_date)}</span>
+                      {!readOnly && (
+                        <input 
+                          type="date" 
+                          defaultValue={r.entry_date} 
+                          onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} 
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+                        />
+                      )}
+                    </div>
+                  </td>
                   <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.name} placeholder="Details" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.amount} onBlur={(e) => Number(e.target.value) !== Number(r.amount) && updateField(r, "amount", e.target.value)} className="cell-input text-right tabular-nums" /></td>
                   {!readOnly && <td className="px-2 py-1"><button onClick={() => deleteRow(r)} className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button></td>}
