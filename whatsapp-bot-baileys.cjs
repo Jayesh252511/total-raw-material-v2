@@ -45,6 +45,15 @@ const PORT = process.env.PORT || 3000;
 require('http').createServer(async (req, res) => {
   const urlObj = new URL(req.url, `http://${req.headers.host}`);
   
+  // Endpoint to reset pairing code / QR
+  if (urlObj.pathname === '/reset') {
+    latestPairingCode = null;
+    latestQRDataURL = null;
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
   // Endpoint to request pairing code
   if (urlObj.pathname === '/pair' && req.method === 'POST') {
     let body = '';
@@ -95,6 +104,7 @@ require('http').createServer(async (req, res) => {
             <p style="color:#8b949e;font-size:14px;">WhatsApp → Linked Devices → Link with phone number instead</p>
             <div class="code-box">${latestPairingCode}</div>
             <p style="color:#58a6ff;font-size:12px;">Type this 8-digit code in WhatsApp!</p>
+            <p style="margin-top:15px;"><a href="/reset" style="color:#f85149;font-size:13px;text-decoration:none;">❌ Wrong Number? Click here to try again</a></p>
           ` : `
             <form action="/pair" method="POST" style="margin-bottom:20px;">
               <p style="color:#8b949e;font-size:13px;margin-bottom:8px;">Enter your phone number with country code (e.g. 919876543210):</p>
