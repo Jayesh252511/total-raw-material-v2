@@ -440,10 +440,24 @@ async function startBot() {
 
         const jid = msg.key.remoteJid;
         const isGroup = jid.endsWith('@g.us');
-        if (!isGroup) continue;
+        let isTargetGroup = false;
 
-        const groupMeta = await sock.groupMetadata(jid).catch(() => null);
-        if (!groupMeta || groupMeta.subject !== TARGET_GROUP) continue;
+        if (isGroup) {
+          const groupMeta = await sock.groupMetadata(jid).catch(() => null);
+          if (groupMeta && groupMeta.subject) {
+            if (groupMeta.subject.toLowerCase().includes('total raw material')) {
+              isTargetGroup = true;
+            }
+          } else {
+            // Allow if metadata check temporary fails
+            isTargetGroup = true;
+          }
+        } else {
+          // Allow Direct Messages (DMs) to the bot as well
+          isTargetGroup = true;
+        }
+
+        if (!isTargetGroup) continue;
 
         const msgContent = msg.message;
         if (!msgContent) continue;
