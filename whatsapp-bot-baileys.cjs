@@ -121,7 +121,7 @@ require('http').createServer(async (req, res) => {
       </html>
     `);
   }
-}).listen(PORT, () => {
+}).listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 Web & Pairing Server listening on port ${PORT}`);
 });
 
