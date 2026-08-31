@@ -240,16 +240,15 @@ function detectCategory(message, paidTo) {
 
 // ─── PROCESS PHONEPAY IMAGE ────────────────────────────────────────────────
 async function processPhonePeImage(imageBase64, mimeType) {
-  const prompt = `This is a PhonePe payment screenshot from India.
-Read all text carefully. Return ONLY valid JSON:
+  const prompt = `Read all text visible in this payment receipt screenshot carefully.
+Extract the main payment details into JSON format:
 {
-  "date": "DD Month YYYY",
-  "amount": <number only>,
-  "paid_to_name": "<name>",
-  "message": "<Message field text>",
-  "transaction_id": "<PhonePe Transaction ID starting with T>"
-}
-Use null for missing fields.`;
+  "date": "Date if visible e.g. 31 August 2026",
+  "amount": 550,
+  "paid_to_name": "Banking name or Paid to name",
+  "message": "Message field text",
+  "transaction_id": "PhonePe Transaction ID starting with T"
+}`;
 
   const text = await callGemini([
     { inline_data: { mime_type: mimeType, data: imageBase64 } },
