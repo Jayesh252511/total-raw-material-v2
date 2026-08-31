@@ -1,0 +1,7 @@
+services:
+  - type: worker
+    name: total-raw-material-bot
+    env: node
+    buildCommand: npm install
+    startCommand: node whatsapp-bot-baileys.cjs
+    autoDeploy: true
