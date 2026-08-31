@@ -1,20 +1,15 @@
 /**
  * WhatsApp Bot — Total Raw Material (Baileys Version)
- * No Chrome/Puppeteer needed! Connects via WebSocket directly.
- *
- * Run: node whatsapp-bot-baileys.cjs
+ * Web Server & High-Res QR Webpage for Render 24/7 Cloud Hosting
  */
 
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
+const qrcodeTerm = require('qrcode-terminal');
+const QRCode = require('qrcode');
 const pino = require('pino');
 const https = require('https');
 const fs = require('fs');
-// ─── HEALTH SERVER (FOR RENDER FREE TIER) ──────────────────────────────────
-const PORT = process.env.PORT || 3000;
-require('http').createServer((req, res) => res.end('WhatsApp Bot is Live 🚀')).listen(PORT, () => {
-  console.log(`🌐 Health server listening on port ${PORT}`);
-});
+const path = require('path');
 
 // Load environment variables from .env if present
 if (fs.existsSync('.env')) {
@@ -38,6 +33,64 @@ const AUTH_FOLDER    = './baileys_auth';
 
 const EXT_URL = 'bdqskcyjzeshsjwacbvr.supabase.co';
 const EXT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkcXNrY3lqemVzaHNqd2FjYnZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4ODMwNTAsImV4cCI6MjA5MzQ1OTA1MH0.DlCOhjBW3PTnPmzYNPrUgrVcPatfJgdX-uI9bP3xm0s';
+
+// ─── STATE ─────────────────────────────────────────────────────────────────
+let latestQRDataURL = null;
+let isBotConnected = false;
+
+// ─── HTTP SERVER (DISPLAY HIGH-RES QR WEBPAGE & KEEP RENDER AWAKE) ─────────
+const PORT = process.env.PORT || 3000;
+require('http').createServer(async (req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  if (isBotConnected) {
+    res.end(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>WhatsApp Bot Status</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font-family:sans-serif;background:#0d1117;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;} .card{background:#161b22;padding:30px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);text-align:center;border:1px solid #30363d;} .badge{background:#238636;color:#fff;padding:8px 18px;border-radius:20px;font-weight:bold;display:inline-block;margin-bottom:15px;}</style></head>
+      <body>
+        <div class="card">
+          <div class="badge">🟢 ONLINE & CONNECTED</div>
+          <h2>WhatsApp Bot — Total Raw Material</h2>
+          <p style="color:#8b949e">Bot is active and running 24/7 in the cloud!</p>
+        </div>
+      </body>
+      </html>
+    `);
+  } else if (latestQRDataURL) {
+    res.end(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Scan WhatsApp QR Code</title><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="5"><style>body{font-family:sans-serif;background:#0d1117;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;} .card{background:#161b22;padding:30px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);text-align:center;border:1px solid #30363d;max-width:360px;} img{border-radius:12px;background:#fff;padding:12px;margin:20px 0;width:260px;height:260px;}</style></head>
+      <body>
+        <div class="card">
+          <h2 style="margin:0 0 10px 0">📱 Scan QR Code</h2>
+          <p style="color:#8b949e;font-size:14px;margin:0">WhatsApp → Settings → Linked Devices → Link a Device</p>
+          <img src="${latestQRDataURL}" alt="Scan QR Code" />
+          <p style="color:#58a6ff;font-size:12px">Auto-refreshing... Scan with WhatsApp</p>
+        </div>
+      </body>
+      </html>
+    `);
+  } else {
+    res.end(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Loading Bot...</title><meta http-equiv="refresh" content="3"><style>body{font-family:sans-serif;background:#0d1117;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
+      <body><h2>⏳ Starting WhatsApp Bot... Please wait 5 seconds.</h2></body>
+      </html>
+    `);
+  }
+}).listen(PORT, () => {
+  console.log(`🌐 Web & QR Server listening on port ${PORT}`);
+});
+
+// Self-pinger to prevent Render free tier from sleeping
+setInterval(() => {
+  const renderUrl = process.env.RENDER_EXTERNAL_URL;
+  if (renderUrl) {
+    https.get(renderUrl).on('error', () => {});
+  }
+}, 4 * 60 * 1000); // Every 4 minutes
 
 // ─── HELPERS ───────────────────────────────────────────────────────────────
 function fmtINR(n) {
@@ -312,16 +365,23 @@ async function startBot() {
 
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      console.log('\n📱 SCAN THIS QR CODE WITH YOUR WHATSAPP:\n');
-      qrcode.generate(qr, { small: true });
-      console.log('\nWhatsApp → Settings → Linked Devices → Link a Device → Scan\n');
+      console.log('\n📱 New QR code generated. Visit your web URL to scan!\n');
+      qrcodeTerm.generate(qr, { small: true });
+      try {
+        latestQRDataURL = await QRCode.toDataURL(qr);
+      } catch (err) {
+        console.error('QR image render error:', err);
+      }
     }
     if (connection === 'open') {
+      isBotConnected = true;
+      latestQRDataURL = null;
       console.log('\n✅ WhatsApp Bot is LIVE and ready!');
       console.log(`✅ Listening to group: "${TARGET_GROUP}"`);
       console.log('✅ Forward any PhonePe screenshot to the group to add expenses.\n');
     }
     if (connection === 'close') {
+      isBotConnected = false;
       const code = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = code !== DisconnectReason.loggedOut;
       console.log('⚠️ Connection closed. Code:', code, '| Reconnecting:', shouldReconnect);
