@@ -30,3 +30,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+whatsapp-bot.cjs
+whatsapp-bot-baileys.cjs
+baileys_auth/
+.wwebjs_auth/
+.wwebjs_cache/
+test_gemini.cjs
+test_report.cjs
