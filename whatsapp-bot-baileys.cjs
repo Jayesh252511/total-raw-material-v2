@@ -190,12 +190,12 @@ function fetchExt(urlPath) {
 }
 
 // ─── GEMINI ────────────────────────────────────────────────────────────────
-function callGemini(parts) {
+function callGeminiModel(model, parts) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify({ contents: [{ parts }] });
     const opts = {
       hostname: 'generativelanguage.googleapis.com',
-      path: `/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
+      path: `/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
     };
@@ -205,7 +205,13 @@ function callGemini(parts) {
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          resolve(parsed?.candidates?.[0]?.content?.parts?.[0]?.text || '');
+          const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          if (res.statusCode === 200 && text) {
+            resolve(text);
+          } else {
+            console.warn(`Gemini model ${model} returned ${res.statusCode}`);
+            resolve('');
+          }
         } catch { resolve(''); }
       });
     });
@@ -213,6 +219,15 @@ function callGemini(parts) {
     req.write(payload);
     req.end();
   });
+}
+
+async function callGemini(parts) {
+  const models = ['gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-flash-latest'];
+  for (const model of models) {
+    const res = await callGeminiModel(model, parts).catch(() => '');
+    if (res) return res;
+  }
+  return '';
 }
 
 // ─── CATEGORY ──────────────────────────────────────────────────────────────
