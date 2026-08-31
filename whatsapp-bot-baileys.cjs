@@ -10,7 +10,11 @@ const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const https = require('https');
 const fs = require('fs');
-const path = require('path');
+// ─── HEALTH SERVER (FOR RENDER FREE TIER) ──────────────────────────────────
+const PORT = process.env.PORT || 3000;
+require('http').createServer((req, res) => res.end('WhatsApp Bot is Live 🚀')).listen(PORT, () => {
+  console.log(`🌐 Health server listening on port ${PORT}`);
+});
 
 // Load environment variables from .env if present
 if (fs.existsSync('.env')) {
