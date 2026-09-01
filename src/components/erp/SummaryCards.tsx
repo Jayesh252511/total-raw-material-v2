@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { TrendingUp, TrendingDown, Wallet, Package, Receipt, Wrench, Calendar, CalendarDays, ShoppingCart, Lock, Coins } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { fmtINR, fmtTons } from "@/lib/format";
@@ -31,6 +31,30 @@ function Sparkline({ tone }: { tone: string }) {
 
 function Card({ s }: { s: Stat }) {
   const Icon = s.icon;
+  const cardRef = useRef<HTMLElement>(null);
+  const [transform, setTransform] = useState("perspective(1000px) rotateX(0deg) rotateY(0deg)");
+  const [spotlight, setSpotlight] = useState({ x: 50, y: 50, opacity: 0 });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    const rotateX = -((y - centerY) / centerY) * 6;
+    const rotateY = ((x - centerX) / centerX) * 6;
+
+    setTransform(`perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) scale3d(1.02, 1.02, 1.02)`);
+    setSpotlight({ x: Math.round((x / rect.width) * 100), y: Math.round((y / rect.height) * 100), opacity: 1 });
+  };
+
+  const handleMouseLeave = () => {
+    setTransform("perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)");
+    setSpotlight((prev) => ({ ...prev, opacity: 0 }));
+  };
+
   const toneMap = {
     primary: "text-primary bg-primary/10 border-primary/20",
     success: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
@@ -45,27 +69,42 @@ function Card({ s }: { s: Stat }) {
     info: "glow-card-info",
     danger: "glow-card-danger",
   };
+
   const Comp = s.onClick ? "button" : "div";
+
   return (
     <Comp
+      ref={cardRef as any}
       onClick={s.onClick}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={{ transform, transition: "transform 0.15s ease-out, box-shadow 0.3s ease" }}
       className={cn(
-        "group relative rounded-xl border bg-card/90 backdrop-blur-md p-3.5 sm:p-4 shadow-soft transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 text-left w-full overflow-hidden flex flex-col justify-between min-h-[102px]",
+        "group relative rounded-xl border bg-card/90 backdrop-blur-md p-3.5 sm:p-4 shadow-soft text-left w-full overflow-hidden flex flex-col justify-between min-h-[102px] transform-gpu",
         glowMap[s.tone ?? "primary"],
         s.onClick && "cursor-pointer hover:border-primary/50"
       )}
     >
-      <div className="flex items-start justify-between gap-2">
+      {/* 3D Laser Spotlight Effect */}
+      <div
+        className="pointer-events-none absolute -inset-px transition-opacity duration-300 rounded-xl"
+        style={{
+          opacity: spotlight.opacity,
+          background: `radial-gradient(350px circle at ${spotlight.x}% ${spotlight.y}%, rgba(99, 102, 241, 0.18), transparent 70%)`
+        }}
+      />
+
+      <div className="flex items-start justify-between gap-2 relative z-10">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{s.label}</p>
           <p className="mt-1 text-base sm:text-lg font-bold tracking-tight tabular-nums truncate">{s.value}</p>
         </div>
-        <div className={cn("flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border transition-transform group-hover:scale-105", toneMap[s.tone ?? "primary"])}>
+        <div className={cn("flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border transition-transform group-hover:scale-110", toneMap[s.tone ?? "primary"])}>
           <Icon className="h-4 w-4" strokeWidth={2.2} />
         </div>
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-2 pt-1 border-t border-border/30">
+      <div className="mt-2 flex items-center justify-between gap-2 pt-1 border-t border-border/30 relative z-10">
         <p className="text-[10px] text-muted-foreground truncate max-w-[65%]">{s.hint || "Live metric"}</p>
         <Sparkline tone={s.tone ?? 'primary'} />
       </div>

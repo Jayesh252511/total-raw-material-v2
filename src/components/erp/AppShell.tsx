@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
-import { BarChart3, Boxes, FileSpreadsheet, FileText, Home, Layers, Lock, ReceiptText, ShoppingCart, Wallet, Plus, Sun, Moon } from "lucide-react";
+import { BarChart3, Boxes, FileSpreadsheet, FileText, Home, Layers, Lock, ReceiptText, ShoppingCart, Wallet, Plus, Sun, Moon, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AuthButton } from "@/components/erp/AuthButton";
 import { SettingsDialog } from "@/components/erp/SettingsDialog";
@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Expense, PcEntry, Sell, Settings } from "@/lib/erpStore";
 import { ExportDialog } from "@/components/erp/ExportDialog";
+import { CommandPalette } from "@/components/erp/CommandPalette";
+import { AIChatWidget } from "@/components/erp/AIChatWidget";
 import { supabase } from "@/integrations/supabase/client";
 import { logAudit } from "@/lib/audit";
 import { toast } from "sonner";
@@ -145,6 +147,7 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
   const pathname = useLocation({ select: (s) => s.pathname });
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"excel" | "pdf">("pdf");
+  const [cmdOpen, setCmdOpen] = useState(false);
 
   const handleExport = (fmt: "excel" | "pdf") => {
     setExportFormat(fmt);
@@ -152,10 +155,17 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0 transition-colors duration-300">
+    <div className="min-h-screen bg-background text-foreground pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0 transition-colors duration-300 relative overflow-x-hidden">
       <Toaster richColors position="top-right" />
+
+      {/* Floating Ambient Background Neon Mesh Orbs (Dark Mode) */}
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-30 dark:opacity-40">
+        <div className="absolute -top-40 -left-40 h-[450px] w-[450px] rounded-full bg-primary/20 blur-[130px]" />
+        <div className="absolute top-1/2 -right-40 h-[450px] w-[450px] rounded-full bg-indigo-500/20 blur-[130px]" />
+      </div>
+
       <header className="sticky top-0 z-30 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-3 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-3 py-3 sm:px-6 relative z-10">
           <div className="flex items-center gap-3">
             <Link to="/" className="flex min-w-0 items-center gap-2.5">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-primary to-indigo-500 text-primary-foreground shadow-soft">
@@ -184,6 +194,11 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
             })}
           </nav>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <Button variant="outline" size="sm" onClick={() => setCmdOpen(true)} className="hidden sm:flex items-center gap-2 h-8 rounded-lg border-border/60 text-xs text-muted-foreground hover:text-foreground">
+              <Search className="h-3.5 w-3.5" />
+              <span>Search...</span>
+              <kbd className="font-mono text-[10px] bg-muted px-1 rounded border">Ctrl K</kbd>
+            </Button>
             <AddFundsDialog currentMoney={settings.total_money} effectiveMoney={effectiveMoney} currentLock={settings.lock_money} disabled={readOnly} />
             <ThemeToggle />
             <AuthButton />
@@ -197,7 +212,7 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-[1500px] space-y-5 px-3 py-4 sm:px-6 sm:py-5">{children}</main>
+      <main className="mx-auto max-w-[1500px] space-y-5 px-3 py-4 sm:px-6 sm:py-5 relative z-10">{children}</main>
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-2 pb-[env(safe-area-inset-bottom)] pt-2 shadow-elevated backdrop-blur md:hidden">
         <div className="grid grid-cols-5 gap-1">
           {navItems.map((item) => {
@@ -212,6 +227,9 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
           })}
         </div>
       </nav>
+
+      <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} rawMaterials={rawMaterials} sells={sells} expenses={expenses} />
+      <AIChatWidget rawMaterials={rawMaterials} sells={sells} expenses={expenses} settings={settings} effectiveMoney={effectiveMoney} totalStock={totalStock} />
 
       <ExportDialog
         open={exportOpen}
