@@ -741,6 +741,53 @@ async function handleText(text, sender = 'default') {
   return `🤖 *Samajh nahi aaya!*\n"_${text.slice(0, 40)}_"\n\nYeh commands try karo:\n• *sell entry add* — Add sell bill\n• *report* — Full data\n• *petrol* — Petrol details\n• *stock* — Maal balance\n• *balance* — Cash balance\n• *delete [name]* — Delete entry\n\n📸 _PhonePe screenshot bhejo for auto-entry_`;
 }
 
+// ─── SUPABASE SESSION SNAPSHOT (Survives Render Cloud Restarts & Sleep) ────
+async function restoreSessionFromSupabase() {
+  try {
+    const res = await supabase('GET', 'bot_session?id=eq.session_snapshot');
+    if (Array.isArray(res) && res.length > 0 && res[0].data) {
+      const files = res[0].data;
+      if (!fs.existsSync(AUTH_FOLDER)) fs.mkdirSync(AUTH_FOLDER, { recursive: true });
+      let count = 0;
+      for (const fileName in files) {
+        const filePath = path.join(AUTH_FOLDER, fileName);
+        fs.writeFileSync(filePath, files[fileName], 'utf8');
+        count++;
+      }
+      if (count > 0) {
+        console.log(`✅ Restored ${count} WhatsApp login session files from Supabase DB!`);
+        return true;
+      }
+    }
+  } catch (e) {
+    console.error('Session restore error:', e?.message || e);
+  }
+  return false;
+}
+
+async function saveSessionToSupabase() {
+  try {
+    if (!fs.existsSync(AUTH_FOLDER)) return;
+    const fileNames = fs.readdirSync(AUTH_FOLDER);
+    if (fileNames.length === 0) return;
+
+    const sessionData = {};
+    for (const file of fileNames) {
+      const filePath = path.join(AUTH_FOLDER, file);
+      if (fs.statSync(filePath).isFile()) {
+        sessionData[file] = fs.readFileSync(filePath, 'utf8');
+      }
+    }
+
+    await supabase('POST', 'bot_session', {
+      id: 'session_snapshot',
+      data: sessionData
+    });
+  } catch (e) {
+    console.error('Session save error:', e?.message || e);
+  }
+}
+
 let currentSock = null;
 
 // ─── MAIN BOT ──────────────────────────────────────────────────────────────
@@ -749,6 +796,9 @@ async function startBot() {
     try { currentSock.ev.removeAllListeners(); currentSock.ws?.close(); } catch {}
     currentSock = null;
   }
+
+  // Restore active login session from Supabase DB before initialization
+  await restoreSessionFromSupabase();
 
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
   const { version } = await fetchLatestBaileysVersion();
@@ -764,7 +814,10 @@ async function startBot() {
   });
   currentSock = sock;
 
-  sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('creds.update', async () => {
+    await saveCreds();
+    await saveSessionToSupabase();
+  });
 
   // Request Pairing Code if not registered and no code requested yet
   if (!sock.authState.creds.registered && !currentPairingCode) {
@@ -814,8 +867,9 @@ async function startBot() {
       if (shouldReconnect) {
         setTimeout(startBot, code === 515 ? 1000 : 3000);
       } else {
-        console.log('❌ Session invalidated (Code 401). Clearing auth folder for fresh pairing...');
+        console.log('❌ Session invalidated (Code 401). Clearing auth folder & DB session snapshot for fresh pairing...');
         try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch {}
+        try { await supabase('DELETE', 'bot_session?id=eq.session_snapshot'); } catch {}
         currentPairingCode = null;
         currentQRCodeImage = null;
         setTimeout(startBot, 2000);
