@@ -1229,7 +1229,7 @@ async function startBot() {
           const dateFmt = entryDate.split('-').reverse().join('-');
           await sock.sendMessage(jid, {
             text: `✅ *Entry Add Ho Gayi!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${dateFmt}*\n💰 Amount: *${fmtINR(data.amount)}*\n📝 Name: *${entryName}*\n🏷️ Category: *${catLabel}*\n🔖 Txn ID: ${data.transaction_id || 'N/A'}\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete last" likho_`
-          });
+          }, { quoted: msg });
 
         // ── TEXT COMMAND ──────────────────────────────────────────────────
         } else {
@@ -1240,13 +1240,13 @@ async function startBot() {
           try {
             const reply = await handleText(text, sender);
             if (reply) {
-              console.log(`📤 Sending reply (${reply.length} chars) to ${jid}...`);
-              const sendRes = await sock.sendMessage(jid, { text: reply });
+              console.log(`📤 Sending quoted reply (${reply.length} chars) to ${jid}...`);
+              const sendRes = await sock.sendMessage(jid, { text: reply }, { quoted: msg });
               if (sendRes) console.log('✅ Reply sent successfully to WhatsApp!');
             }
           } catch (cmdErr) {
             console.error('❌ Command execution error:', cmdErr?.message || cmdErr);
-            await sock.sendMessage(jid, { text: `❌ Command process karne mein error aaya: ${cmdErr?.message || 'Unknown error'}` }).catch(() => {});
+            await sock.sendMessage(jid, { text: `❌ Command process karne mein error aaya: ${cmdErr?.message || 'Unknown error'}` }, { quoted: msg }).catch(() => {});
           }
         }
 
