@@ -5,7 +5,7 @@
  * Run: node whatsapp-bot-baileys.cjs
  */
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadContentFromMessage, initAuthCreds, BufferJSON, proto } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const https = require('https');
@@ -26,23 +26,8 @@ const AUTH_FOLDER    = './baileys_auth';
 let currentPairingCode = null;
 let botStatus = 'Starting...';
 
-// ─── MEDIA DOWNLOAD HELPER ──────────────────────────────────────────────────
-async function getMediaBuffer(mediaMsg, mediaType) {
-  const stream = await downloadContentFromMessage(mediaMsg, mediaType);
-  let buffer = Buffer.alloc(0);
-  for await (const chunk of stream) {
-    buffer = Buffer.concat([buffer, chunk]);
-  }
-  return buffer;
-}
-
 // ─── HTTP DASHBOARD (Serves Pairing Code & Keeps Render Awake) ──────────────
 http.createServer((req, res) => {
-  if (req.url === '/ping' || req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    return res.end('PONG_OK');
-  }
-
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(`
     <!DOCTYPE html>
@@ -86,17 +71,6 @@ http.createServer((req, res) => {
   console.log(`🌐 Web Dashboard listening on port ${PORT}`);
 });
 
-// ─── SELF-PINGER TIMER (Prevents Render Free Tier 15-min Sleep) ─────────────
-const RENDER_SERVICE_URL = process.env.RENDER_EXTERNAL_URL || 'https://total-raw-material-v2.onrender.com';
-setInterval(() => {
-  try {
-    const pingUrl = `${RENDER_SERVICE_URL}/ping`;
-    https.get(pingUrl, (res) => {
-      console.log(`📡 Keep-Alive pulse sent to Render (Status: ${res.statusCode})`);
-    }).on('error', () => {});
-  } catch {}
-}, 90 * 1000); // Pulse every 90 seconds for ultra-fast response
-
 // ─── HELPERS ───────────────────────────────────────────────────────────────
 function fmtINR(n) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(n) || 0);
@@ -109,122 +83,76 @@ const EXT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 
 // ─── SUPABASE ──────────────────────────────────────────────────────────────
 function supabase(method, urlPath, body) {
-  return new Promise((resolve) => {
-    try {
-      const payload = body ? JSON.stringify(body) : null;
-      const opts = {
-        hostname: SUPABASE_URL,
-        path: `/rest/v1/${urlPath}`,
-        method,
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          ...(method === 'POST' || method === 'PATCH' ? { 'Prefer': 'return=representation' } : {}),
-          ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
-        },
-        timeout: 10000
-      };
-      const req = https.request(opts, (res) => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          try { resolve(JSON.parse(data)); } catch { resolve([]); }
-        });
-      });
-      req.on('error', (err) => {
-        console.error('Supabase request error:', err?.message || err);
-        resolve([]);
-      });
-      req.on('timeout', () => {
-        req.destroy();
-        console.error('Supabase request timeout:', urlPath);
-        resolve([]);
-      });
-      if (payload) req.write(payload);
-      req.end();
-    } catch {
-      resolve([]);
-    }
+  return new Promise((resolve, reject) => {
+    const payload = body ? JSON.stringify(body) : null;
+    const opts = {
+      hostname: SUPABASE_URL,
+      path: `/rest/v1/${urlPath}`,
+      method,
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        ...(method === 'POST' || method === 'PATCH' ? { 'Prefer': 'return=representation' } : {}),
+        ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
+      }
+    };
+    const req = https.request(opts, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(data); } });
+    });
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
   });
 }
 
 function fetchExt(urlPath) {
-  return new Promise((resolve) => {
-    try {
-      const opts = {
-        hostname: EXT_URL,
-        path: `/rest/v1/${urlPath}`,
-        method: 'GET',
-        headers: {
-          'apikey': EXT_KEY,
-          'Authorization': `Bearer ${EXT_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 10000
-      };
-      const req = https.request(opts, (res) => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          try { resolve(JSON.parse(data)); } catch { resolve([]); }
-        });
-      });
-      req.on('error', (err) => {
-        console.error('Ext fetch error:', err?.message || err);
-        resolve([]);
-      });
-      req.on('timeout', () => {
-        req.destroy();
-        console.error('Ext fetch timeout:', urlPath);
-        resolve([]);
-      });
-      req.end();
-    } catch {
-      resolve([]);
-    }
+  return new Promise((resolve, reject) => {
+    const opts = {
+      hostname: EXT_URL,
+      path: `/rest/v1/${urlPath}`,
+      method: 'GET',
+      headers: {
+        'apikey': EXT_KEY,
+        'Authorization': `Bearer ${EXT_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    };
+    const req = https.request(opts, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(data); } });
+    });
+    req.on('error', reject);
+    req.end();
   });
 }
 
-// ─── GEMINI API CALL (With Model Fallback) ─────────────────────────────────
+// ─── GEMINI ────────────────────────────────────────────────────────────────
 function callGemini(parts) {
-  const models = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.5-lite', 'gemini-2.5-flash-lite', 'gemini-flash-latest'];
-  return new Promise((resolve) => {
-    let attempt = 0;
-
-    function tryNext() {
-      if (attempt >= models.length) {
-        return resolve('');
-      }
-      const model = models[attempt++];
-      const payload = JSON.stringify({ contents: [{ parts }] });
-      const cleanKey = GEMINI_API_KEY.replace(/[^a-zA-Z0-9_\-]/g, '');
-      const opts = {
-        hostname: 'generativelanguage.googleapis.com',
-        path: `/v1beta/models/${model}:generateContent?key=${cleanKey}`,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
-      };
-      const req = https.request(opts, (res) => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(data);
-            const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) {
-              return resolve(text);
-            }
-          } catch {}
-          tryNext();
-        });
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({ contents: [{ parts }] });
+    const opts = {
+      hostname: 'generativelanguage.googleapis.com',
+      path: `/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+    };
+    const req = https.request(opts, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed?.candidates?.[0]?.content?.parts?.[0]?.text || '');
+        } catch { resolve(''); }
       });
-      req.on('error', () => tryNext());
-      req.write(payload);
-      req.end();
-    }
-
-    tryNext();
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
   });
 }
 
@@ -239,62 +167,22 @@ function detectCategory(message, paidTo) {
 // ─── PROCESS PHONEPAY IMAGE ────────────────────────────────────────────────
 async function processPhonePeImage(imageBase64, mimeType) {
   const prompt = `This is a PhonePe payment screenshot from India.
-Read all text carefully. Extract the payment details: Date, Amount (number), Paid To Name, Message/Note, and PhonePe Transaction ID (starts with T).
-Return ONLY valid JSON:
+Read all text carefully. Return ONLY valid JSON:
 {
-  "date": "31 August 2026",
-  "amount": 10000,
-  "paid_to_name": "Indian Oil",
-  "message": "Diesel",
-  "transaction_id": "T26083112345678"
-}`;
+  "date": "DD Month YYYY",
+  "amount": <number only>,
+  "paid_to_name": "<name>",
+  "message": "<Message field text>",
+  "transaction_id": "<PhonePe Transaction ID starting with T>"
+}
+Use null for missing fields.`;
 
   const text = await callGemini([
-    { inlineData: { mimeType: mimeType || 'image/jpeg', data: imageBase64 } },
+    { inline_data: { mime_type: mimeType, data: imageBase64 } },
     { text: prompt }
   ]);
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('No JSON in Gemini response');
-  return JSON.parse(match[0]);
-}
-
-// ─── PROCESS VOICE AUDIO NOTE ──────────────────────────────────────────────
-async function processVoiceAudio(audioBase64, mimeType) {
-  const prompt = `You are an AI voice assistant for a raw material business in India (selling stone/aggregate/sand by tons).
-Listen carefully to this audio voice note (which may be in Hindi, Hinglish, Marathi, Gujarati, or English).
-Transcribe what the speaker is saying, and convert it into a clear text command for our bot.
-
-Examples of voice commands:
-- If speaker says: "Mahesh ko 2 ton becha 200 rate se bhada 100 payment 300"
-  command: "sell add mahesh 2 200 300 gadi 100"
-- If speaker says: "Sell bill add karna hai"
-  command: "sell bill add"
-- If speaker says: "Kitna maal bacha hai" or "Haath me maal kitna hai"
-  command: "stock"
-- If speaker says: "Report dikhao" or "Aaj ka report"
-  command: "report"
-- If speaker says: "August month report" or "August ki report"
-  command: "august report"
-- If speaker says: "Petrol 500 rs add karo"
-  command: "petrol 500"
-- If speaker says: "Lock amount 5000 add karo"
-  command: "lock add 5000"
-- If speaker says: "Mahesh entry delete karo"
-  command: "delete mahesh"
-
-Return ONLY a valid JSON object:
-{
-  "transcript": "<Exact transcription in original spoken language>",
-  "command": "<Clean parsed command string>"
-}`;
-
-  const text = await callGemini([
-    { inlineData: { mimeType: mimeType || 'audio/ogg; codecs=opus', data: audioBase64 } },
-    { text: prompt }
-  ]);
-
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('No JSON in Gemini audio response');
   return JSON.parse(match[0]);
 }
 
@@ -899,188 +787,6 @@ async function handleText(text, sender = 'default') {
   return `🤖 *Samajh nahi aaya!*\n"_${text.slice(0, 40)}_"\n\nYeh commands try karo:\n• *sell entry add* — Add sell bill\n• *report* — Full data\n• *petrol* — Petrol details\n• *stock* — Maal balance\n• *balance* — Cash balance\n• *delete [name]* — Delete entry\n\n📸 _PhonePe screenshot bhejo for auto-entry_`;
 }
 
-// ─── PERSISTENT SUPABASE AUTH STATE (Prevents Render Unlinking) ───────────────
-async function useCombinedAuthState(folder) {
-  const localAuth = await useMultiFileAuthState(folder);
-
-  try {
-    const res = await supabase('GET', 'bot_session?id=eq.creds');
-    if (Array.isArray(res) && res.length > 0 && res[0]?.data) {
-      const dbCreds = JSON.parse(JSON.stringify(res[0].data), BufferJSON.reviver);
-      if (dbCreds && dbCreds.noiseKey) {
-        Object.assign(localAuth.state.creds, dbCreds);
-        console.log('🔄 Restored WhatsApp auth session from Supabase Database!');
-      }
-    }
-  } catch (e) {
-    console.log('ℹ️ Supabase auth session fallback to local auth');
-  }
-
-  const saveCreds = async () => {
-    await localAuth.saveCreds();
-    try {
-      const payloadData = JSON.parse(JSON.stringify(localAuth.state.creds, BufferJSON.replacer));
-      const res = await supabase('POST', 'bot_session', {
-        id: 'creds',
-        data: payloadData,
-        updated_at: new Date().toISOString()
-      });
-      if (res?.code || res?.error) {
-        await supabase('PATCH', 'bot_session?id=eq.creds', {
-          data: payloadData,
-          updated_at: new Date().toISOString()
-        });
-      }
-    } catch {}
-  };
-
-  const originalGet = localAuth.state.keys.get;
-  const originalSet = localAuth.state.keys.set;
-
-  localAuth.state.keys.get = async (type, ids) => {
-    const data = await originalGet(type, ids);
-    const missingIds = ids.filter(id => !data[id]);
-    if (missingIds.length > 0) {
-      await Promise.all(missingIds.map(async id => {
-        const keyId = `${type}-${id}`;
-        try {
-          const res = await supabase('GET', `bot_session?id=eq.${encodeURIComponent(keyId)}`);
-          if (Array.isArray(res) && res.length > 0 && res[0]?.data) {
-            const val = JSON.parse(JSON.stringify(res[0].data), BufferJSON.reviver);
-            if (type === 'app-state-sync-key' && val && proto) {
-              data[id] = proto.Message.AppStateSyncKeyData.fromObject(val);
-            } else {
-              data[id] = val;
-            }
-          }
-        } catch {}
-      }));
-    }
-    return data;
-  };
-
-  localAuth.state.keys.set = async (data) => {
-    await originalSet(data);
-    const tasks = [];
-    for (const type in data) {
-      for (const id in data[type]) {
-        const value = data[type][id];
-        const keyId = `${type}-${id}`;
-        if (value) {
-          const payloadData = JSON.parse(JSON.stringify(value, BufferJSON.replacer));
-          tasks.push(
-            supabase('POST', 'bot_session', {
-              id: keyId,
-              data: payloadData,
-              updated_at: new Date().toISOString()
-            }).catch(() =>
-              supabase('PATCH', `bot_session?id=eq.${encodeURIComponent(keyId)}`, {
-                data: payloadData,
-                updated_at: new Date().toISOString()
-              })
-            )
-          );
-        } else {
-          tasks.push(supabase('DELETE', `bot_session?id=eq.${encodeURIComponent(keyId)}`));
-        }
-      }
-    }
-    await Promise.all(tasks).catch(() => {});
-  };
-
-  return { state: localAuth.state, saveCreds };
-}
-
-// ─── FAST IN-MEMORY GROUP CACHE (Eliminates Network Delays) ────────────────
-const groupSubjectCache = new Map();
-
-async function isTargetGroup(sock, jid) {
-  if (!jid) return false;
-  if (!jid.endsWith('@g.us')) return true; // Allow direct 1-on-1 chat to bot
-
-  function matchesTargetGroup(subj) {
-    if (!subj) return false;
-    const s = subj.trim().toLowerCase();
-    return s.includes('total raw material') || s.includes('total-raw-material') || s === TARGET_GROUP.trim().toLowerCase();
-  }
-
-  if (groupSubjectCache.has(jid)) {
-    return matchesTargetGroup(groupSubjectCache.get(jid));
-  }
-  const meta = await sock.groupMetadata(jid).catch(() => null);
-  if (meta?.subject) {
-    groupSubjectCache.set(jid, meta.subject);
-    return matchesTargetGroup(meta.subject);
-  }
-  try {
-    const groups = await sock.groupFetchAllParticipating();
-    for (const gId in groups) {
-      if (groups[gId]?.subject) {
-        groupSubjectCache.set(gId, groups[gId].subject);
-        if (gId === jid) {
-          return matchesTargetGroup(groups[gId].subject);
-        }
-      }
-    }
-  } catch {}
-  return false;
-}
-
-// ─── SUPABASE SESSION BACKUP & RESTORE (Eliminates Render Unlinking) ─────────
-async function restoreAuthFolderFromSupabase(folder) {
-  try {
-    if (!fs.existsSync(folder)) {
-      fs.mkdirSync(folder, { recursive: true });
-    }
-    const files = fs.readdirSync(folder);
-    if (files.length > 0 && fs.existsSync(path.join(folder, 'creds.json'))) {
-      return;
-    }
-
-    console.log('🔄 Ephemeral disk reset detected! Restoring WhatsApp session from Supabase Cloud...');
-    const res = await supabase('GET', 'bot_session?id=eq.auth_backup');
-    if (Array.isArray(res) && res.length > 0 && res[0]?.data) {
-      const fileMap = res[0].data;
-      let restoredCount = 0;
-      for (const fileName in fileMap) {
-        fs.writeFileSync(path.join(folder, fileName), fileMap[fileName], 'utf-8');
-        restoredCount++;
-      }
-      console.log(`✅ Successfully restored ${restoredCount} auth files from Supabase!`);
-    }
-  } catch (e) {
-    console.error('Error restoring auth folder from Supabase:', e?.message || e);
-  }
-}
-
-async function backupAuthFolderToSupabase(folder) {
-  try {
-    if (!fs.existsSync(folder)) return;
-    const files = fs.readdirSync(folder);
-    if (files.length === 0) return;
-
-    const fileMap = {};
-    for (const file of files) {
-      const filePath = path.join(folder, file);
-      if (fs.statSync(filePath).isFile()) {
-        fileMap[file] = fs.readFileSync(filePath, 'utf-8');
-      }
-    }
-
-    const res = await supabase('POST', 'bot_session', {
-      id: 'auth_backup',
-      data: fileMap,
-      updated_at: new Date().toISOString()
-    });
-    if (res?.code || res?.error) {
-      await supabase('PATCH', 'bot_session?id=eq.auth_backup', {
-        data: fileMap,
-        updated_at: new Date().toISOString()
-      });
-    }
-  } catch {}
-}
-
 let currentSock = null;
 
 // ─── MAIN BOT ──────────────────────────────────────────────────────────────
@@ -1090,29 +796,22 @@ async function startBot() {
     currentSock = null;
   }
 
-  await restoreAuthFolderFromSupabase(AUTH_FOLDER);
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
   const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
     version,
     auth: state,
-    logger: pino({ level: 'silent' }),
+    logger: pino({ level: 'silent' }), // silent = no debug spam
     printQRInTerminal: false,
     browser: ['Ubuntu', 'Chrome', '20.0.04'],
-    markOnlineOnConnect: true,
-    syncFullHistory: false,
-    keepAliveIntervalMs: 10000, // Keep WebSocket connection hot every 10s
-    connectTimeoutMs: 60000,
-    retryRequestDelayMs: 250
+    markOnlineOnConnect: false,
+    syncFullHistory: false
   });
   currentSock = sock;
 
   // Save credentials on update
-  sock.ev.on('creds.update', async () => {
-    await saveCreds();
-    backupAuthFolderToSupabase(AUTH_FOLDER);
-  });
+  sock.ev.on('creds.update', saveCreds);
 
   // Connection updates
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
@@ -1136,56 +835,7 @@ async function startBot() {
       currentPairingCode = null;
       console.log('\n✅ WhatsApp Bot is LIVE and ready!');
       console.log(`✅ Listening to group: "${TARGET_GROUP}"`);
-      console.log('✅ Forward any PhonePe screenshot to the group to add expenses.');
-      console.log('✅ Send any Audio Voice Note to auto-transcribe and process commands!\n');
-
-      backupAuthFolderToSupabase(AUTH_FOLDER);
-
-      // Pre-fetch participating groups to cache target group JID instantly
-      try {
-        const groups = await sock.groupFetchAllParticipating();
-        for (const gId in groups) {
-          if (groups[gId]?.subject) {
-            groupSubjectCache.set(gId, groups[gId].subject);
-          }
-        }
-        console.log(`✅ Pre-cached ${groupSubjectCache.size} WhatsApp groups!`);
-      } catch (e) {
-        console.error('Group pre-fetch error:', e?.message || e);
-      }
-
-      // ── 8:00 PM AUTOMATIC DAILY CLOSING BULLETIN SCHEDULE ──────────────────
-      if (!global.bulletinInterval) {
-        let lastBulletinDate = '';
-        global.bulletinInterval = setInterval(async () => {
-          try {
-            const now = new Date();
-            const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
-            const hours = ist.getUTCHours();
-            const minutes = ist.getUTCMinutes();
-            const dateStr = ist.toISOString().split('T')[0];
-
-            // Trigger at 8:00 PM IST (20:00 IST)
-            if (hours === 20 && minutes === 0 && lastBulletinDate !== dateStr) {
-              lastBulletinDate = dateStr;
-              console.log('📢 Triggering 8:00 PM Daily Closing Bulletin...');
-              if (currentSock) {
-                const groups = await currentSock.groupFetchAllParticipating().catch(() => ({}));
-                const group = Object.values(groups).find(g => g.subject === TARGET_GROUP);
-                if (group?.id) {
-                  const rpt = await generateReport();
-                  const dateFmt = dateStr.split('-').reverse().join('-');
-                  const bulletinHeader = `📢 *DAILY EVENING CLOSING BULLETIN (8:00 PM)*\n📅 Date: *${dateFmt}*\n━━━━━━━━━━━━━━━━━━━━\n`;
-                  await currentSock.sendMessage(group.id, { text: bulletinHeader + rpt });
-                  console.log('✅ Daily 8:00 PM Bulletin posted to WhatsApp group!');
-                }
-              }
-            }
-          } catch (e) {
-            console.error('Bulletin timer error:', e?.message || e);
-          }
-        }, 45000);
-      }
+      console.log('✅ Forward any PhonePe screenshot to the group to add expenses.\n');
     }
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
@@ -1195,7 +845,9 @@ async function startBot() {
       if (shouldReconnect) {
         setTimeout(startBot, code === 515 ? 1000 : 3000);
       } else {
-        console.log('❌ Logged out. Delete baileys_auth folder and restart.');
+        console.log('❌ Session invalidated (Code 401). Automatically clearing auth folder and requesting fresh pairing code...');
+        try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch {}
+        setTimeout(startBot, 2000);
       }
     }
   });
@@ -1208,8 +860,12 @@ async function startBot() {
 
         // Get chat info
         const jid = msg.key.remoteJid;
-        // Check if message is from target group or direct chat (0.0001ms)
-        if (!(await isTargetGroup(sock, jid))) continue;
+        const isGroup = jid.endsWith('@g.us');
+        if (!isGroup) continue;
+
+        // Get group name
+        const groupMeta = await sock.groupMetadata(jid).catch(() => null);
+        if (!groupMeta || groupMeta.subject !== TARGET_GROUP) continue;
 
         const msgContent = msg.message;
         if (!msgContent) continue;
@@ -1218,7 +874,7 @@ async function startBot() {
         const textContent = msgContent.conversation || msgContent.extendedTextMessage?.text || '';
         const BOT_REPLY_PREFIXES = [
           '⏳', '✅', '❌', '⚠️', // status messages
-          '📊', '💰', '⛽', '👷', '🗑️', '🤖', '💵', '📢', '🎙️', // report & voice messages
+          '📊', '💰', '⛽', '👷', '🗑️', '🤖', '💵', // report & money messages
           '📦 *STOCK', '🔒 *Lock', '🛒 *SELL', '📋 *DATA', '📄 *PDF', '📝', '👤', '⚖️', '💳', '🚛', // wizard & command replies
           '📅', // date lines in reports
         ];
@@ -1226,25 +882,20 @@ async function startBot() {
           continue; // skip own bot replies
         }
 
+
         console.log(`📨 Message in "${TARGET_GROUP}" | fromMe: ${msg.key.fromMe} | Type: ${Object.keys(msgContent).join(', ')}`);
 
         // ── IMAGE: PhonePe Screenshot ─────────────────────────────────────
-        const actualImg = msgContent.imageMessage || msgContent.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
+        const imgMsg = msgContent.imageMessage || msgContent.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
+        const actualImg = msgContent.imageMessage;
 
         if (actualImg) {
-          console.log('🖼️ Image detected! Downloading media stream...');
-          await sock.sendMessage(jid, { text: '⏳ Screenshot padh raha hoon...' }, { quoted: msg });
+          console.log('🖼️ Image detected! Processing...');
+          await sock.sendMessage(jid, { text: '⏳ Screenshot padh raha hoon...' });
 
-          let buffer;
-          try {
-            buffer = await getMediaBuffer(actualImg, 'image');
-            console.log(`✅ Image stream downloaded (${buffer.length} bytes)!`);
-          } catch (dlErr) {
-            console.error('Media download error:', dlErr?.message || dlErr);
-            await sock.sendMessage(jid, { text: '❌ Image download nahi ho paaya. Kripya dobara bhejein.' }, { quoted: msg });
-            continue;
-          }
-
+          // Download image
+          const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+          const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
           const base64 = buffer.toString('base64');
           const mime = actualImg.mimetype || 'image/jpeg';
 
@@ -1252,8 +903,8 @@ async function startBot() {
           try {
             data = await processPhonePeImage(base64, mime);
           } catch (e) {
-            console.error('Gemini OCR error:', e.message);
-            await sock.sendMessage(jid, { text: '❌ Screenshot read nahi hua. Clear image bhejiye.' }, { quoted: msg });
+            console.error('Gemini error:', e.message);
+            await sock.sendMessage(jid, { text: '❌ Screenshot read nahi hua. Clear image bhejiye.' });
             continue;
           }
 
@@ -1306,25 +957,16 @@ async function startBot() {
           const dateFmt = entryDate.split('-').reverse().join('-');
           await sock.sendMessage(jid, {
             text: `✅ *Entry Add Ho Gayi!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${dateFmt}*\n💰 Amount: *${fmtINR(data.amount)}*\n📝 Name: *${entryName}*\n🏷️ Category: *${catLabel}*\n🔖 Txn ID: ${data.transaction_id || 'N/A'}\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete last" likho_`
-          }, { quoted: msg });
+          });
 
         // ── TEXT COMMAND ──────────────────────────────────────────────────
         } else {
           const text = msgContent.conversation || msgContent.extendedTextMessage?.text || '';
           if (!text) continue;
-          const sender = msg.key.participant || msg.key.remoteJid || 'default';
-          console.log(`💬 Processing command: "${text}" from ${sender}`);
-          try {
-            const reply = await handleText(text, sender);
-            if (reply) {
-              console.log(`📤 Sending quoted reply (${reply.length} chars) to ${jid}...`);
-              const sendRes = await sock.sendMessage(jid, { text: reply }, { quoted: msg });
-              if (sendRes) console.log('✅ Reply sent successfully to WhatsApp!');
-            }
-          } catch (cmdErr) {
-            console.error('❌ Command execution error:', cmdErr?.message || cmdErr);
-            await sock.sendMessage(jid, { text: `❌ Command process karne mein error aaya: ${cmdErr?.message || 'Unknown error'}` }, { quoted: msg }).catch(() => {});
-          }
+          console.log(`💬 Text: "${text}"`);
+          const sender = msg.key.participant || msg.key.remoteJid;
+          const reply = await handleText(text, sender);
+          if (reply) await sock.sendMessage(jid, { text: reply });
         }
 
       } catch (err) {
