@@ -8,13 +8,13 @@ import { fmtINR } from "@/lib/format";
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  rawMaterials: PcEntry[];
-  sells: Sell[];
-  expenses: Expense[];
+  rawMaterials?: PcEntry[];
+  sells?: Sell[];
+  expenses?: Expense[];
   onAddFundsClick?: () => void;
 };
 
-export function CommandPalette({ open, onOpenChange, rawMaterials, sells, expenses, onAddFundsClick }: Props) {
+export function CommandPalette({ open, onOpenChange, rawMaterials = [], sells = [], expenses = [], onAddFundsClick }: Props) {
   const navigate = useNavigate();
 
   useEffect(() => {

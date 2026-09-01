@@ -6,12 +6,12 @@ import type { PcEntry, Sell, Expense, Settings } from "@/lib/erpStore";
 import { fmtINR, fmtTons } from "@/lib/format";
 
 type Props = {
-  rawMaterials: PcEntry[];
-  sells: Sell[];
-  expenses: Expense[];
-  settings: Settings;
-  effectiveMoney: number;
-  totalStock: number;
+  rawMaterials?: PcEntry[];
+  sells?: Sell[];
+  expenses?: Expense[];
+  settings?: Settings;
+  effectiveMoney?: number;
+  totalStock?: number;
 };
 
 type Message = {
@@ -21,7 +21,7 @@ type Message = {
   time: string;
 };
 
-export function AIChatWidget({ rawMaterials, sells, expenses, settings, effectiveMoney, totalStock }: Props) {
+export function AIChatWidget({ rawMaterials = [], sells = [], expenses = [], settings, effectiveMoney = 0, totalStock = 0 }: Props) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([

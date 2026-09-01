@@ -10,13 +10,13 @@ import type { Settings } from "@/lib/erpStore";
 import { toast } from "sonner";
 import { fmtINR } from "@/lib/format";
 
-export function SettingsDialog({ settings, effectiveMoney, disabled }: { settings: Settings; effectiveMoney: number; disabled: boolean }) {
+export function SettingsDialog({ settings, effectiveMoney, disabled }: { settings?: Settings; effectiveMoney?: number; disabled: boolean }) {
   const [open, setOpen] = useState(false);
-  const [money, setMoney] = useState(String(settings.total_money));
-  const [stock, setStock] = useState(String(settings.stock_adjustment));
-  const [lowM, setLowM] = useState(String(settings.low_money_threshold));
-  const [lowS, setLowS] = useState(String(settings.low_stock_threshold));
-  const [highT, setHighT] = useState(String(settings.high_txn_threshold));
+  const [money, setMoney] = useState(String(settings?.total_money || 0));
+  const [stock, setStock] = useState(String(settings?.stock_adjustment || 0));
+  const [lowM, setLowM] = useState(String(settings?.low_money_threshold || 0));
+  const [lowS, setLowS] = useState(String(settings?.low_stock_threshold || 0));
+  const [highT, setHighT] = useState(String(settings?.high_txn_threshold || 0));
 
   async function save() {
     const before = { ...settings };
@@ -37,12 +37,12 @@ export function SettingsDialog({ settings, effectiveMoney, disabled }: { setting
   return (
     <Dialog open={open} onOpenChange={(o) => {
       setOpen(o);
-      if (o) {
-        setMoney(String(settings.total_money));
-        setStock(String(settings.stock_adjustment));
-        setLowM(String(settings.low_money_threshold));
-        setLowS(String(settings.low_stock_threshold));
-        setHighT(String(settings.high_txn_threshold));
+      if (o && settings) {
+        setMoney(String(settings.total_money || 0));
+        setStock(String(settings.stock_adjustment || 0));
+        setLowM(String(settings.low_money_threshold || 0));
+        setLowS(String(settings.low_stock_threshold || 0));
+        setHighT(String(settings.high_txn_threshold || 0));
       }
     }}>
       <DialogTrigger asChild>

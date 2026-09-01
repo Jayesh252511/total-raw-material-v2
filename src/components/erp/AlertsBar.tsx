@@ -2,18 +2,19 @@ import { AlertTriangle, AlertCircle, TrendingUp } from "lucide-react";
 import type { RawMaterial, Expense, Settings } from "@/lib/erpStore";
 import { fmtINR, fmtNum } from "@/lib/format";
 
-type Props = { settings: Settings; effectiveMoney: number; totalStock: number; rawMaterials: RawMaterial[]; expenses: Expense[] };
+type Props = { settings?: Settings; effectiveMoney?: number; totalStock?: number; rawMaterials?: RawMaterial[]; expenses?: Expense[] };
 
-export function AlertsBar({ settings, effectiveMoney, totalStock, rawMaterials, expenses }: Props) {
+export function AlertsBar({ settings, effectiveMoney = 0, totalStock = 0, rawMaterials = [], expenses = [] }: Props) {
+  if (!settings) return null;
   const alerts: { tone: "warning" | "danger" | "info"; msg: string; icon: typeof AlertTriangle }[] = [];
-  if (effectiveMoney < settings.low_money_threshold) {
+  if (effectiveMoney < (settings.low_money_threshold || 0)) {
     alerts.push({ tone: "danger", icon: AlertCircle, msg: `Low money: ${fmtINR(effectiveMoney)} (below ${fmtINR(settings.low_money_threshold)})` });
   }
-  if (totalStock < settings.low_stock_threshold) {
+  if (totalStock < (settings.low_stock_threshold || 0)) {
     alerts.push({ tone: "warning", icon: AlertTriangle, msg: `Low stock: ${fmtNum(totalStock, 3)} t (below ${fmtNum(settings.low_stock_threshold, 3)} t)` });
   }
-  const recent = [...rawMaterials.map((r) => Number(r.total_amount)), ...expenses.map((e) => Number(e.amount))];
-  const high = recent.filter((v) => v >= settings.high_txn_threshold);
+  const recent = [...rawMaterials.map((r) => Number(r.total_amount) || 0), ...expenses.map((e) => Number(e.amount) || 0)];
+  const high = recent.filter((v) => v >= (settings.high_txn_threshold || 0));
   if (high.length > 0) {
     alerts.push({ tone: "info", icon: TrendingUp, msg: `${high.length} high transaction(s) above ${fmtINR(settings.high_txn_threshold)}` });
   }
