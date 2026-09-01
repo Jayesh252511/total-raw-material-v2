@@ -4,6 +4,14 @@ import { RouterProvider } from '@tanstack/react-router'
 import { getRouter } from './router'
 import './styles.css'
 
+if (typeof window !== "undefined") {
+  if (localStorage.getItem("theme") === "dark" || (!localStorage.getItem("theme") && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+    document.documentElement.classList.add("dark");
+  } else {
+    document.documentElement.classList.remove("dark");
+  }
+}
+
 const router = getRouter()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

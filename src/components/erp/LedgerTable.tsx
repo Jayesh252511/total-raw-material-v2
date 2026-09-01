@@ -17,13 +17,17 @@ const formatDate = (dateStr: string) => {
   if (!dateStr) return "";
   const parts = dateStr.split("-");
   if (parts.length === 3) {
-    const year = parts[0].slice(-2);
-    const month = parts[1];
-    const day = parts[2];
     return `${day}-${month}-${year}`;
   }
   return dateStr;
 };
+
+function getInitials(name?: string) {
+  if (!name) return "—";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
 
 type Mode = "purchase" | "sell";
 type Row = RawMaterial & { vehicle_number?: string; gadi_bhada?: number };
@@ -418,7 +422,14 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                       )}
                     </div>
                   </td>
-                  <td className="px-1 py-1"><input disabled={readOnly} defaultValue={r.name} placeholder="Name" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" /></td>
+                  <td className="px-1 py-1">
+                    <div className="flex items-center gap-1.5 px-1">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase">
+                        {getInitials(r.name)}
+                      </div>
+                      <input disabled={readOnly} defaultValue={r.name} onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" />
+                    </div>
+                  </td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.001" defaultValue={r.quantity} onBlur={(e) => Number(e.target.value) !== Number(r.quantity) && updateField(r, "quantity", e.target.value)} className="cell-input text-right tabular-nums" /></td>
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.rate} onBlur={(e) => Number(e.target.value) !== Number(r.rate) && updateField(r, "rate", e.target.value)} className="cell-input text-right tabular-nums" /></td>
                   {isSell && <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{fmtNum(baseAmt, 2)}</td>}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
-import { BarChart3, Boxes, FileSpreadsheet, FileText, Home, Layers, Lock, ReceiptText, ShoppingCart, Wallet, Plus, Sun, Moon } from "lucide-react";
+import { BarChart3, Boxes, FileSpreadsheet, FileText, Home, Layers, Lock, ReceiptText, ShoppingCart, Wallet, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AuthButton } from "@/components/erp/AuthButton";
 import { SettingsDialog } from "@/components/erp/SettingsDialog";
@@ -111,6 +111,26 @@ function AddFundsDialog({ currentMoney, effectiveMoney, currentLock, disabled }:
 
 
 
+function ThemeToggle() {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+  const toggle = () => {
+    const next = !dark;
+    setDark(next);
+    if (next) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  };
+  return (
+    <Button variant="outline" size="icon" onClick={toggle} className="h-8 w-8 rounded-lg border-border/60 hover:bg-accent">
+      {dark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-indigo-600" />}
+    </Button>
+  );
+}
+
 export function AppShell({ children, settings, effectiveMoney, readOnly, rawMaterials, sells, expenses, totalStock }: Props) {
   const pathname = useLocation({ select: (s) => s.pathname });
   const [exportOpen, setExportOpen] = useState(false);
@@ -121,72 +141,47 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
     setExportOpen(true);
   };
 
-  const [isDark, setIsDark] = useState(() => typeof document !== 'undefined' && document.documentElement.classList.contains("dark"));
-
-  const toggleTheme = () => {
-    const next = !isDark;
-    setIsDark(next);
-    if (next) {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-background pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0 transition-colors duration-200">
+    <div className="min-h-screen bg-background text-foreground pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0 transition-colors duration-300">
       <Toaster richColors position="top-right" />
-      <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-2 px-3 py-2.5 sm:px-6">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Link to="/" className="flex min-w-0 items-center gap-2">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-soft">
-                <Layers className="h-4 w-4" />
+      <header className="sticky top-0 z-30 border-b border-border/50 bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-3 py-3 sm:px-6">
+          <div className="flex items-center gap-3">
+            <Link to="/" className="flex min-w-0 items-center gap-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-primary to-indigo-500 text-primary-foreground shadow-soft">
+                <Layers className="h-4.5 w-4.5" />
               </div>
               <div className="min-w-0">
-                <h1 className="truncate text-sm sm:text-base font-semibold leading-none tracking-tight">Ledger ERP</h1>
-                <p className="truncate text-[10px] sm:text-[11px] leading-tight text-muted-foreground">Inventory · Sells · Expenses</p>
+                <h1 className="truncate text-base font-bold leading-none tracking-tight">Ledger ERP</h1>
+                <p className="truncate text-[11px] leading-tight text-muted-foreground">Inventory · Sells · Expenses</p>
               </div>
             </Link>
-
-            {/* 24/7 Live WhatsApp Cloud Bot Badge */}
-            <div className="hidden sm:flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 shadow-soft">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="truncate">24/7 Cloud Bot</span>
-            </div>
+            <a href="https://total-raw-material-v2.onrender.com" target="_blank" rel="noreferrer" className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-colors">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>24/7 Cloud Bot</span>
+            </a>
           </div>
 
-          <nav className="hidden items-center gap-1 rounded-lg border bg-card p-1 shadow-soft lg:flex">
+          <nav className="hidden items-center gap-1 rounded-xl border border-border/50 bg-card/60 backdrop-blur-md p-1 shadow-soft lg:flex">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.to;
               return (
-                <Button key={item.to} asChild variant={active ? "default" : "ghost"} size="sm" className="h-8 text-xs">
+                <Button key={item.to} asChild variant={active ? "default" : "ghost"} size="sm" className="h-8 rounded-lg">
                   <Link to={item.to}><Icon className="h-3.5 w-3.5" />{item.label}</Link>
                 </Button>
               );
             })}
           </nav>
-          
-          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <AddFundsDialog currentMoney={settings.total_money} effectiveMoney={effectiveMoney} currentLock={settings.lock_money} disabled={readOnly} />
-
-            {/* Dark/Light Mode Toggle */}
-            <Button variant="outline" size="icon" onClick={toggleTheme} className="h-8 w-8 rounded-lg shrink-0">
-              {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-slate-700" />}
-            </Button>
-
+            <ThemeToggle />
             <AuthButton />
             <SettingsDialog settings={settings} effectiveMoney={effectiveMoney} disabled={readOnly} />
-            <Button variant="outline" size="sm" onClick={() => handleExport("excel")} className="hidden h-8 md:inline-flex text-xs">
+            <Button variant="outline" size="sm" onClick={() => handleExport("excel")} className="hidden h-8 md:inline-flex rounded-lg">
               <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={() => handleExport("pdf")} className="hidden h-8 md:inline-flex text-xs">
+            <Button variant="outline" size="sm" onClick={() => handleExport("pdf")} className="hidden h-8 md:inline-flex rounded-lg">
               <FileText className="h-3.5 w-3.5" /> PDF
             </Button>
           </div>
