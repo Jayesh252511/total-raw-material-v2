@@ -1,137 +1,23 @@
 /**
  * WhatsApp Bot — Total Raw Material (Baileys Version)
- * Web Server with Pairing Code & QR Image for 24/7 Cloud Hosting
+ * No Chrome/Puppeteer needed! Connects via WebSocket directly.
+ *
+ * Run: node whatsapp-bot-baileys.cjs
  */
 
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const qrcodeTerm = require('qrcode-terminal');
-const QRCode = require('qrcode');
+const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-// Load environment variables from .env if present
-if (fs.existsSync('.env')) {
-  const envContent = fs.readFileSync('.env', 'utf8');
-  envContent.split('\n').forEach(line => {
-    const parts = line.split('=');
-    if (parts.length >= 2) {
-      const k = parts[0].trim();
-      const v = parts.slice(1).join('=').trim().replace(/^["']|["']$/g, '');
-      if (k && !process.env[k]) process.env[k] = v;
-    }
-  });
-}
-
 // ─── CONFIG ────────────────────────────────────────────────────────────────
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const SUPABASE_URL   = process.env.SUPABASE_URL || 'ujgepdkbproyrexmtapn.supabase.co';
-const SUPABASE_KEY   = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqZ2VwZGticHJveXJleG10YXBuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4OTQ4MzIsImV4cCI6MjA5MzQ3MDgzMn0.COpbpBVao65qzGsK0heH4ente6fcMAM0R_g3kujqI7I';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || ['AQ.Ab8RN6L98wYh0', 'WVJctsfAcRCEXpnQnF4Prk4wydRBOH8KhtqHA'].join('');
+const SUPABASE_URL   = 'ujgepdkbproyrexmtapn.supabase.co';
+const SUPABASE_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqZ2VwZGticHJveXJleG10YXBuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4OTQ4MzIsImV4cCI6MjA5MzQ3MDgzMn0.COpbpBVao65qzGsK0heH4ente6fcMAM0R_g3kujqI7I';
 const TARGET_GROUP   = 'Bot total raw material';
 const AUTH_FOLDER    = './baileys_auth';
-
-const EXT_URL = 'bdqskcyjzeshsjwacbvr.supabase.co';
-const EXT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkcXNrY3lqemVzaHNqd2FjYnZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4ODMwNTAsImV4cCI6MjA5MzQ1OTA1MH0.DlCOhjBW3PTnPmzYNPrUgrVcPatfJgdX-uI9bP3xm0s';
-
-// ─── STATE ─────────────────────────────────────────────────────────────────
-let latestQRDataURL = null;
-let latestPairingCode = null;
-let isBotConnected = false;
-let currentSock = null;
-
-// ─── HTTP SERVER (PAIRING CODE & QR DISPLAY WEBPAGE) ───────────────────────
-const PORT = process.env.PORT || 3000;
-require('http').createServer(async (req, res) => {
-  const urlObj = new URL(req.url, `http://${req.headers.host}`);
-  
-  // Endpoint to reset pairing code / QR
-  if (urlObj.pathname === '/reset') {
-    latestPairingCode = null;
-    latestQRDataURL = null;
-    res.writeHead(302, { Location: '/' });
-    res.end();
-    return;
-  }
-
-  // Endpoint to request pairing code
-  if (urlObj.pathname === '/pair' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const params = new URLSearchParams(body);
-        let phone = (params.get('phone') || '').replace(/[^0-9]/g, '');
-        if (phone && currentSock && !isBotConnected) {
-          console.log(`📱 Requesting pairing code for phone: ${phone}`);
-          latestPairingCode = await currentSock.requestPairingCode(phone);
-          console.log(`🔑 Pairing Code: ${latestPairingCode}`);
-        }
-      } catch (err) {
-        console.error('Pairing code error:', err.message);
-      }
-      res.writeHead(302, { Location: '/' });
-      res.end();
-    });
-    return;
-  }
-
-  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-  if (isBotConnected) {
-    res.end(`
-      <!DOCTYPE html>
-      <html>
-      <head><title>WhatsApp Bot Status</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font-family:sans-serif;background:#0d1117;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;} .card{background:#161b22;padding:30px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);text-align:center;border:1px solid #30363d;} .badge{background:#238636;color:#fff;padding:8px 18px;border-radius:20px;font-weight:bold;display:inline-block;margin-bottom:15px;}</style></head>
-      <body>
-        <div class="card">
-          <div class="badge">🟢 ONLINE & CONNECTED</div>
-          <h2>WhatsApp Bot — Total Raw Material</h2>
-          <p style="color:#8b949e">Bot is active and running 24/7 in the cloud!</p>
-        </div>
-      </body>
-      </html>
-    `);
-  } else {
-    res.end(`
-      <!DOCTYPE html>
-      <html>
-      <head><title>Link WhatsApp Bot</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font-family:sans-serif;background:#0d1117;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;box-sizing:border-box;} .card{background:#161b22;padding:25px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);text-align:center;border:1px solid #30363d;max-width:380px;width:100%;} img{border-radius:12px;background:#fff;padding:12px;margin:15px 0;width:240px;height:240px;} input{padding:10px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;font-size:16px;width:80%;margin-bottom:10px;text-align:center;} button{padding:10px 20px;border-radius:8px;border:none;background:#238636;color:#fff;font-weight:bold;font-size:15px;cursor:pointer;} .code-box{background:#0d1117;border:2px dashed #238636;padding:15px;border-radius:12px;font-size:28px;font-weight:bold;letter-spacing:4px;color:#3fb950;margin:15px 0;}</style></head>
-      <body>
-        <div class="card">
-          <h2 style="margin:0 0 10px 0">📱 Link WhatsApp Bot</h2>
-          
-          ${latestPairingCode ? `
-            <p style="color:#8b949e;font-size:14px;">WhatsApp → Linked Devices → Link with phone number instead</p>
-            <div class="code-box">${latestPairingCode}</div>
-            <p style="color:#58a6ff;font-size:12px;">Type this 8-digit code in WhatsApp!</p>
-            <p style="margin-top:15px;"><a href="/reset" style="color:#f85149;font-size:13px;text-decoration:none;">❌ Wrong Number? Click here to try again</a></p>
-          ` : `
-            <form action="/pair" method="POST" style="margin-bottom:20px;">
-              <p style="color:#8b949e;font-size:13px;margin-bottom:8px;">Enter your phone number with country code (e.g. 919876543210):</p>
-              <input type="text" name="phone" placeholder="919876543210" required />
-              <br/>
-              <button type="submit">Get 8-Digit Code</button>
-            </form>
-            <hr style="border:0;border-top:1px solid #30363d;margin:20px 0;"/>
-            <p style="color:#8b949e;font-size:13px;">Or scan QR image below:</p>
-            ${latestQRDataURL ? `<img src="${latestQRDataURL}" alt="Scan QR Code" />` : `<p style="color:#8b949e">Loading QR...</p>`}
-          `}
-        </div>
-      </body>
-      </html>
-    `);
-  }
-}).listen(PORT, '0.0.0.0', () => {
-  console.log(`🌐 Web & Pairing Server listening on port ${PORT}`);
-});
-
-// Self-pinger to prevent Render free tier from sleeping
-setInterval(() => {
-  const renderUrl = process.env.RENDER_EXTERNAL_URL;
-  if (renderUrl) {
-    https.get(renderUrl).on('error', () => {});
-  }
-}, 4 * 60 * 1000);
 
 // ─── HELPERS ───────────────────────────────────────────────────────────────
 function fmtINR(n) {
@@ -139,6 +25,9 @@ function fmtINR(n) {
 }
 function today() { return new Date().toISOString().split('T')[0]; }
 function currentMonth() { return today().slice(0, 7); }
+
+const EXT_URL = 'bdqskcyjzeshsjwacbvr.supabase.co';
+const EXT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkcXNrY3lqemVzaHNqd2FjYnZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4ODMwNTAsImV4cCI6MjA5MzQ1OTA1MH0.DlCOhjBW3PTnPmzYNPrUgrVcPatfJgdX-uI9bP3xm0s';
 
 // ─── SUPABASE ──────────────────────────────────────────────────────────────
 function supabase(method, urlPath, body) {
@@ -152,7 +41,7 @@ function supabase(method, urlPath, body) {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
         'Content-Type': 'application/json',
-        ...(method === 'POST' ? { 'Prefer': 'return=representation' } : {}),
+        ...(method === 'POST' || method === 'PATCH' ? { 'Prefer': 'return=representation' } : {}),
         ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
       }
     };
@@ -190,12 +79,12 @@ function fetchExt(urlPath) {
 }
 
 // ─── GEMINI ────────────────────────────────────────────────────────────────
-function callGeminiModel(model, parts) {
+function callGemini(parts) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify({ contents: [{ parts }] });
     const opts = {
       hostname: 'generativelanguage.googleapis.com',
-      path: `/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+      path: `/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
     };
@@ -205,13 +94,7 @@ function callGeminiModel(model, parts) {
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          if (res.statusCode === 200 && text) {
-            resolve(text);
-          } else {
-            console.warn(`Gemini model ${model} returned ${res.statusCode}`);
-            resolve('');
-          }
+          resolve(parsed?.candidates?.[0]?.content?.parts?.[0]?.text || '');
         } catch { resolve(''); }
       });
     });
@@ -219,15 +102,6 @@ function callGeminiModel(model, parts) {
     req.write(payload);
     req.end();
   });
-}
-
-async function callGemini(parts) {
-  const models = ['gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-flash-latest'];
-  for (const model of models) {
-    const res = await callGeminiModel(model, parts).catch(() => '');
-    if (res) return res;
-  }
-  return '';
 }
 
 // ─── CATEGORY ──────────────────────────────────────────────────────────────
@@ -240,47 +114,44 @@ function detectCategory(message, paidTo) {
 
 // ─── PROCESS PHONEPAY IMAGE ────────────────────────────────────────────────
 async function processPhonePeImage(imageBase64, mimeType) {
-  const prompt = `Read all text visible in this payment receipt screenshot carefully.
-Extract the main payment details into JSON format:
+  const prompt = `This is a PhonePe payment screenshot from India.
+Read all text carefully. Return ONLY valid JSON:
 {
-  "date": "Date if visible e.g. 31 August 2026",
-  "amount": 550,
-  "paid_to_name": "Banking name or Paid to name",
-  "message": "Message field text",
-  "transaction_id": "PhonePe Transaction ID starting with T"
-}`;
+  "date": "DD Month YYYY",
+  "amount": <number only>,
+  "paid_to_name": "<name>",
+  "message": "<Message field text>",
+  "transaction_id": "<PhonePe Transaction ID starting with T>"
+}
+Use null for missing fields.`;
 
   const text = await callGemini([
     { inline_data: { mime_type: mimeType, data: imageBase64 } },
     { text: prompt }
   ]);
-
-  console.log('🤖 Gemini raw response:', text ? text.slice(0, 500) : '(empty)');
-
-  if (!text) return null;
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) return null;
-  try {
-    return JSON.parse(match[0]);
-  } catch {
-    return null;
-  }
+  if (!match) throw new Error('No JSON in Gemini response');
+  return JSON.parse(match[0]);
 }
 
 function parseDate(dateStr) {
   if (!dateStr) return today();
   try {
+    // Parse date string manually to avoid timezone rollback issues
+    // Gemini returns formats like "30 August 2026" or "30 Aug 2026"
     const months = { january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12,
       jan:1,feb:2,mar:3,apr:4,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
     const parts = dateStr.toLowerCase().replace(/,/g, '').split(/\s+/);
     if (parts.length >= 3) {
       let day, month, year;
+      // "30 August 2026" or "August 30 2026"
       if (isNaN(parts[0])) { month = months[parts[0]]; day = parseInt(parts[1]); year = parseInt(parts[2]); }
       else { day = parseInt(parts[0]); month = months[parts[1]]; year = parseInt(parts[2]); }
       if (day && month && year) {
         return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
       }
     }
+    // Fallback: try native parse but adjust for IST (+5:30)
     const d = new Date(dateStr);
     if (!isNaN(d.getTime())) {
       const ist = new Date(d.getTime() + (5.5 * 60 * 60 * 1000));
@@ -296,7 +167,7 @@ async function generateReport() {
   const [expenses, sells, settings, pcEntries] = await Promise.all([
     supabase('GET', 'expenses?select=amount,category,entry_date'),
     supabase('GET', 'sells?select=quantity,payment,entry_date'),
-    supabase('GET', 'settings?select=total_money,lock_money,sell_money&id=eq.1'),
+    supabase('GET', 'settings?select=total_money,lock_money,sell_money,stock_adjustment&id=eq.1'),
     fetchExt('entries?select=qty,rate,entry_date')
   ]);
   const todayDate = today(); const month = currentMonth();
@@ -305,6 +176,7 @@ async function generateReport() {
   const sellArr = Array.isArray(sells) ? sells : [];
   const pcArr = Array.isArray(pcEntries) ? pcEntries : [];
 
+  // Maintenance
   const totalMaint = expArr.reduce((s, e) => s + Number(e.amount || 0), 0);
   const yearMaint = expArr.filter(e => e.entry_date?.startsWith(currentYear)).reduce((s, e) => s + Number(e.amount || 0), 0);
   const todayMaint = expArr.filter(e => e.entry_date === todayDate).reduce((s, e) => s + Number(e.amount || 0), 0);
@@ -312,35 +184,54 @@ async function generateReport() {
   const petrolTotal = expArr.filter(e => e.category === 'petrol_diesel').reduce((s, e) => s + Number(e.amount || 0), 0);
   const operatorTotal = expArr.filter(e => e.category === 'operator').reduce((s, e) => s + Number(e.amount || 0), 0);
 
+  // PC Entries (Raw Material purchases)
   const yearRM = pcArr.filter(r => r.entry_date?.startsWith(currentYear)).reduce((s, r) => s + (Number(r.qty || 0) * Number(r.rate || 0)), 0);
   const yearExpense = yearMaint + yearRM;
 
-  const totalQty = sellArr.reduce((s, e) => s + Number(e.quantity || 0), 0);
+  // Stock
+  const pcStock = pcArr.reduce((s, r) => s + Number(r.qty || 0), 0);
+  const soldStock = sellArr.reduce((s, e) => s + Number(e.quantity || 0), 0);
+  const stockAdj = Number(settings?.[0]?.stock_adjustment || 0);
+  const totalStock = pcStock - soldStock + stockAdj;
+
+  // Sales
+  const totalQty = soldStock;
   const totalPay = sellArr.reduce((s, e) => s + Number(e.payment || 0), 0);
   const monthQty = sellArr.filter(e => e.entry_date?.startsWith(month)).reduce((s, e) => s + Number(e.quantity || 0), 0);
   const todayQty = sellArr.filter(e => e.entry_date === todayDate).reduce((s, e) => s + Number(e.quantity || 0), 0);
+  const yearTons = sellArr.filter(e => e.entry_date?.startsWith(currentYear)).reduce((s, e) => s + Number(e.quantity || 0), 0);
 
+  // Money
   const lockMoney = Number(settings?.[0]?.lock_money || 0);
-  const totalMoney = lockMoney - yearExpense; // Exact Vercel formula
+  const totalMoney = lockMoney - yearExpense;
   const dateLabel = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return `📊 *TOTAL RAW MATERIAL REPORT*
 📅 ${dateLabel}
 ━━━━━━━━━━━━━━━━━━━━
-💰 *CASH BALANCE (Total Money)*
-Haath mein paisa: *${fmtINR(totalMoney)}*
-Lock Amount: *${fmtINR(lockMoney)}*
+💰 *PAISA (Money)*
+• Total Money: *${fmtINR(totalMoney)}*
+• Lock Amount: *${fmtINR(lockMoney)}*
+• Aaj ka Kharcha: *${fmtINR(todayMaint)}*
 
 ━━━━━━━━━━━━━━━━━━━━
-📦 *SALES (Bikri)*
-• Total Qty: *${totalQty.toFixed(3)} tons*
+📦 *STOCK (Maal)*
+• Haath mein maal: *${totalStock.toFixed(3)} tons*
+• Yearly Tons Used: *${yearTons.toFixed(3)} tons*
+• Aaj ka Tons Used: *${todayQty.toFixed(3)} tons*
+
+━━━━━━━━━━━━━━━━━━━━
+🛒 *BIKRI (Sales)*
+• Total Sell Qty: *${totalQty.toFixed(3)} tons*
 • Total Payment: *${fmtINR(totalPay)}*
 • Is Mahine ki Qty: *${monthQty.toFixed(3)} tons*
 • Aaj ki Qty: *${todayQty.toFixed(3)} tons*
 
 ━━━━━━━━━━━━━━━━━━━━
 🔧 *MAINTENANCE (Kharcha)*
-• Total Saal ka: *${fmtINR(totalMaint)}*
+• Yearly Total: *${fmtINR(yearExpense)}*
+• Yearly Maintenance: *${fmtINR(yearMaint)}*
+• Yearly Raw Material: *${fmtINR(yearRM)}*
 • Is Mahine ka: *${fmtINR(monthMaint)}*
 • Aaj ka: *${fmtINR(todayMaint)}*
 • Petrol/Diesel: *${fmtINR(petrolTotal)}*
@@ -349,33 +240,261 @@ Lock Amount: *${fmtINR(lockMoney)}*
 ━━━━━━━━━━━━━━━━━━━━
 _"petrol report" — Petrol details_
 _"operator report" — Majuri details_
+_"stock" — Stock only_
 _"balance" — Cash balance only_`;
+}
+
+// ─── WIZARD & DATE HELPERS ──────────────────────────────────────────────────
+const wizardSessions = new Map();
+
+function parseDateInput(str) {
+  if (!str) return today();
+  const s = str.trim().toLowerCase();
+  if (s === 'today' || s === 'aaj') return today();
+  const m = s.match(/(\d{1,2})[-\/](\d{1,2})(?:[-\/](\d{2,4}))?/);
+  if (m) {
+    let day = m[1].padStart(2, '0');
+    let month = m[2].padStart(2, '0');
+    let year = m[3] ? (m[3].length === 2 ? `20${m[3]}` : m[3]) : new Date().getFullYear().toString();
+    return `${year}-${month}-${day}`;
+  }
+  return today();
 }
 
 async function generatePetrolReport() {
   const expenses = await supabase('GET', 'expenses?select=name,amount,entry_date&category=eq.petrol_diesel&order=entry_date.desc&limit=10');
-  const expArr = Array.isArray(expenses) ? expenses : [];
-  const total = expArr.reduce((s, e) => s + Number(e.amount || 0), 0);
-  const lines = expArr.map(e => `• ${e.entry_date?.slice(5).split('-').reverse().join('-')} — ${e.name} — *${fmtINR(e.amount)}*`).join('\n');
+  const total = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const lines = expenses.map(e => `• ${e.entry_date?.slice(5).split('-').reverse().join('-')} — ${e.name} — *${fmtINR(e.amount)}*`).join('\n');
   return `⛽ *PETROL / DIESEL REPORT* (Last 10)\n━━━━━━━━━━━━━━━━━━━━\n${lines}\n━━━━━━━━━━━━━━━━━━━━\nTotal: *${fmtINR(total)}*`;
 }
 
 async function generateOperatorReport() {
   const expenses = await supabase('GET', 'expenses?select=name,amount,entry_date&category=eq.operator&order=entry_date.desc&limit=10');
-  const expArr = Array.isArray(expenses) ? expenses : [];
-  const total = expArr.reduce((s, e) => s + Number(e.amount || 0), 0);
-  const lines = expArr.map(e => `• ${e.entry_date?.slice(5).split('-').reverse().join('-')} — ${e.name} — *${fmtINR(e.amount)}*`).join('\n');
+  const total = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const lines = expenses.map(e => `• ${e.entry_date?.slice(5).split('-').reverse().join('-')} — ${e.name} — *${fmtINR(e.amount)}*`).join('\n');
   return `👷 *OPERATOR / MAJURI REPORT* (Last 10)\n━━━━━━━━━━━━━━━━━━━━\n${lines}\n━━━━━━━━━━━━━━━━━━━━\nTotal: *${fmtINR(total)}*`;
 }
 
 // ─── TEXT COMMAND HANDLER ──────────────────────────────────────────────────
 let lastInserted = null;
 
-async function handleText(text) {
+async function handleText(text, sender = 'default') {
   const t = text.toLowerCase().trim();
-  if (/petrol|diesel/.test(t) && /report|dikhao|batao/.test(t)) return generatePetrolReport();
-  if (/operator|majuri/.test(t) && /report|dikhao|batao/.test(t)) return generateOperatorReport();
-  if (/report|dikhao|batao|bata|kitna|sari|summary|status|total|aaj|poora|pura/.test(t)) return generateReport();
+
+  // ── 0. WIZARD SESSION STEP-BY-STEP HANDLER ──────────────────────────────
+  if (wizardSessions.has(sender)) {
+    const session = wizardSessions.get(sender);
+    const input = text.trim();
+
+    if (/cancel|stop|roko|band|hatao|exit|abort/i.test(input)) {
+      wizardSessions.delete(sender);
+      return `❌ *Sell bill entry add cancel ho gaya!*`;
+    }
+
+    if (session.step === 'DATE') {
+      session.data.entry_date = parseDateInput(input);
+      session.step = 'NAME';
+      return `👤 *Step 2/6: Customer / Party Name*\n━━━━━━━━━━━━━━━━━━━━\nNaam bataiye (e.g. *Mahesh Mal*):`;
+    }
+
+    if (session.step === 'NAME') {
+      session.data.name = input;
+      session.step = 'QTY';
+      return `⚖️ *Step 3/6: Quantity in Tons*\n━━━━━━━━━━━━━━━━━━━━\nQuantity (tons) bataiye (e.g. *2* ya *21.82*):`;
+    }
+
+    if (session.step === 'QTY') {
+      const q = parseFloat(input.replace(/,/g, ''));
+      if (isNaN(q)) return `❌ Invalid number! Quantity dubara bataiye (e.g. *2*):`;
+      session.data.quantity = q;
+      session.step = 'RATE';
+      return `💵 *Step 4/6: Rate per ton*\n━━━━━━━━━━━━━━━━━━━━\nRate per ton bataiye ₹ (e.g. *200* ya *590*):`;
+    }
+
+    if (session.step === 'RATE') {
+      const r = parseFloat(input.replace(/,/g, ''));
+      if (isNaN(r)) return `❌ Invalid rate! Rate dubara bataiye (e.g. *200*):`;
+      session.data.rate = r;
+      session.step = 'GADI';
+      return `🚛 *Step 5/6: Gadi Bhada*\n━━━━━━━━━━━━━━━━━━━━\nGadi bhada bataiye ₹ (*0* likho agar nahi hai):`;
+    }
+
+    if (session.step === 'GADI') {
+      const g = parseFloat(input.replace(/,/g, '')) || 0;
+      session.data.gadi_bhada = g;
+      session.step = 'PAYMENT';
+      return `💳 *Step 6/6: Payment Received*\n━━━━━━━━━━━━━━━━━━━━\nPayment received bataiye ₹ (e.g. *200* ya *128738*):`;
+    }
+
+    if (session.step === 'PAYMENT') {
+      const p = parseFloat(input.replace(/,/g, '')) || 0;
+      session.data.payment = p;
+
+      // Complete wizard & insert row into sells table
+      const d = session.data;
+      wizardSessions.delete(sender);
+
+      const serialCheck = await supabase('GET', 'sells?select=serial_number&order=serial_number.desc&limit=1');
+      const newSerial = (Number(serialCheck?.[0]?.serial_number) || 0) + 1;
+
+      const inserted = await supabase('POST', 'sells', {
+        entry_date: d.entry_date,
+        serial_number: newSerial,
+        name: d.name,
+        quantity: d.quantity,
+        rate: d.rate,
+        payment: d.payment,
+        gadi_bhada: d.gadi_bhada || 0
+      });
+
+      const savedRow = Array.isArray(inserted) ? inserted[0] : inserted;
+      if (!savedRow?.id) {
+        return `❌ *Sell Entry Save Nahi Hua!*\nReason: ${savedRow?.message || 'Supabase RLS permission issue'}`;
+      }
+
+      lastInserted = { ...savedRow, _type: 'sell' };
+      const dateFmt = d.entry_date.split('-').reverse().join('-');
+      const totalAmt = d.quantity * d.rate;
+
+      return `✅ *Sell Entry Added Successfully!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${dateFmt}*\n👤 Name: *${d.name}*\n⚖️ Qty: *${d.quantity} tons*\n💵 Rate: *₹${d.rate}/t*\n💰 Total: *${fmtINR(totalAmt)}*\n🚛 Gadi Bhada: *${fmtINR(d.gadi_bhada)}*\n💳 Payment: *${fmtINR(d.payment)}*\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete ${d.name}" likho_`;
+    }
+  }
+
+  // ── 1. SMART MULTI-LINE / KEY-VALUE PARSER ──────────────────────────────
+  if (text.includes('\n') || (/(?:date|name|qty|quantity|rate|bhada|payment)/i.test(text) && /\d/.test(text))) {
+    const dateMatch = text.match(/(?:date|taarik|tareekh)\s*[:\-]?\s*([\d\-\/]+|today|aaj)/i);
+    const nameMatch = text.match(/(?:name|naam|customer|party)\s*[:\-]?\s*([^\n\r,]+)/i);
+    const qtyMatch = text.match(/(?:qty|quantity|ton|tons)\s*[:\-]?\s*([\d,.]+)/i);
+    const rateMatch = text.match(/(?:rate|bhav|daam)\s*[:\-]?\s*([\d,.]+)/i);
+    const gadiMatch = text.match(/(?:gadi|bhada|freight)\s*[:\-]?\s*([\d,.]+)/i);
+    const payMatch = text.match(/(?:payment|pay|received|mila)\s*[:\-]?\s*([\d,.]+)/i);
+
+    if (nameMatch && qtyMatch && rateMatch) {
+      const entryDate = parseDateInput(dateMatch?.[1]);
+      const name = nameMatch[1].trim();
+      const qty = parseFloat(qtyMatch[1].replace(/,/g, ''));
+      const rate = parseFloat(rateMatch[1].replace(/,/g, ''));
+      const gadiBhada = gadiMatch ? parseFloat(gadiMatch[1].replace(/,/g, '')) : 0;
+      const payment = payMatch ? parseFloat(payMatch[1].replace(/,/g, '')) : (qty * rate);
+
+      const serialCheck = await supabase('GET', 'sells?select=serial_number&order=serial_number.desc&limit=1');
+      const newSerial = (Number(serialCheck?.[0]?.serial_number) || 0) + 1;
+
+      const inserted = await supabase('POST', 'sells', {
+        entry_date: entryDate,
+        serial_number: newSerial,
+        name,
+        quantity: qty,
+        rate,
+        payment,
+        gadi_bhada: gadiBhada
+      });
+
+      const savedRow = Array.isArray(inserted) ? inserted[0] : inserted;
+      if (!savedRow?.id) {
+        return `❌ *Sell Entry Save Nahi Hua!*\nReason: ${savedRow?.message || 'Database error'}`;
+      }
+
+      lastInserted = { ...savedRow, _type: 'sell' };
+      const dateFmt = entryDate.split('-').reverse().join('-');
+      const totalAmt = qty * rate;
+
+      return `✅ *Sell Entry Add Ho Gayi!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${dateFmt}*\n👤 Name: *${name}*\n⚖️ Qty: *${qty} tons*\n💵 Rate: *₹${rate}/t*\n💰 Total: *${fmtINR(totalAmt)}*\n🚛 Gadi Bhada: *${fmtINR(gadiBhada)}*\n💳 Payment: *${fmtINR(payment)}*\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete ${name}" likho_`;
+    }
+  }
+
+  // ── PETROL / DIESEL ──────────────────────────────────────────────────────
+  if (/petrol|diesel/.test(t)) return generatePetrolReport();
+
+  // ── OPERATOR / MAJURI ────────────────────────────────────────────────────
+  if (/operator|majuri/.test(t) && !/sells|sell|bikri/.test(t)) return generateOperatorReport();
+
+  // ── FULL REPORT / DASHBOARD ──────────────────────────────────────────────
+  if (/report|dashboard|dikhao|batao|bata|sari|summary|status|poora|pura|full/.test(t)) return generateReport();
+
+  // ── STOCK / MAAL ─────────────────────────────────────────────────────────
+  if (/stock|bhandaar|inventory/.test(t) || (t === 'maal') || /kitna maal/.test(t)) {
+    const [sells, pcEntries, settings] = await Promise.all([
+      supabase('GET', 'sells?select=quantity'),
+      fetchExt('entries?select=qty'),
+      supabase('GET', 'settings?select=stock_adjustment&id=eq.1')
+    ]);
+    const pcStock = (Array.isArray(pcEntries) ? pcEntries : []).reduce((s, r) => s + Number(r.qty || 0), 0);
+    const soldStock = (Array.isArray(sells) ? sells : []).reduce((s, e) => s + Number(e.quantity || 0), 0);
+    const stockAdj = Number(settings?.[0]?.stock_adjustment || 0);
+    const totalStock = pcStock - soldStock + stockAdj;
+    return `📦 *STOCK BALANCE*\nHaath mein maal: *${totalStock.toFixed(3)} tons*\nKul Kharida: ${pcStock.toFixed(3)} t\nKul Becha: ${soldStock.toFixed(3)} t`;
+  }
+
+  // ── ADD FUNDS / LOCK AMOUNT UPDATE (Exact website Add Funds modal) ───────
+  // Examples: "add funds 5000", "add money 5000", "lock ammount add 1 rs", "add lock 5000"
+  if (/(fund|funds|lock|money|paisa|ammount|amount)/.test(t) && /(add|jodo|karo|plus|\+|dalo|increase|subtract|minus|kam|hatao|nikal|deduct)/.test(t) && !/sell|bikri|expense/.test(t)) {
+    const nums = text.match(/[\d,]+\.?\d*/g)?.map(n => parseFloat(n.replace(/,/g, ''))) || [];
+    if (nums.length === 0) {
+      return `📋 *ADD FUNDS FORMAT*\n━━━━━━━━━━━━━━━━━━━━\n*add funds [amount] [optional note]*\n\nExamples:\n_add funds 5000_\n_add funds 5000 cash deposit_\n_lock amount add 1000_`;
+    }
+
+    const amount = nums[0];
+    const isSubtract = /subtract|minus|kam|hatao|nikal|deduct/.test(t);
+    const delta = isSubtract ? -amount : amount;
+
+    const currentYear = new Date().getFullYear().toString();
+    const [settings, expenses, pcEntries] = await Promise.all([
+      supabase('GET', 'settings?select=total_money,lock_money&id=eq.1'),
+      supabase('GET', 'expenses?select=amount,entry_date'),
+      fetchExt('entries?select=qty,rate,entry_date')
+    ]);
+
+    const currentTotal = Number(settings?.[0]?.total_money || 0);
+    const currentLock = Number(settings?.[0]?.lock_money || 0);
+
+    const newTotal = currentTotal + delta;
+    const newLock = currentLock + delta;
+
+    // Update settings: both total_money and lock_money (exact website Add Funds logic)
+    const patchRes = await supabase('PATCH', 'settings?id=eq.1', {
+      total_money: newTotal,
+      lock_money: newLock
+    });
+
+    if (!Array.isArray(patchRes) || patchRes.length === 0 || patchRes.code || patchRes.error) {
+      return `❌ *Database Permission Error!*\nSupabase RLS policy is blocking updates to settings.\n\nPlease run the SQL query in Supabase SQL Editor once to grant permissions.`;
+    }
+
+    // Extract optional note from message
+    const note = text.replace(/add|funds?|lock|ammount|amount|money|paisa|rs|rupees|₹|jodo|karo|plus|\+|dalo|increase|subtract|minus|kam|hatao|nikal|deduct|[\d,.]+/gi, '').trim();
+
+    // Log to audit_logs table (for website history tab)
+    try {
+      await supabase('POST', 'audit_logs', {
+        action: 'settings_changed',
+        entity: 'settings',
+        entity_id: '1',
+        device_info: 'WhatsApp Bot',
+        details: {
+          added_to_lock_and_total: delta,
+          note: note || 'Added via WhatsApp Bot',
+          total_before: currentTotal,
+          total_after: newTotal,
+          lock_before: currentLock,
+          lock_after: newLock,
+          added_money: delta,
+          before: currentTotal,
+          after: newTotal
+        }
+      });
+    } catch {}
+
+    // Calculate Net Available Money (lock_money - yearExpense)
+    const yearMaint = (Array.isArray(expenses) ? expenses : []).filter(e => e.entry_date?.startsWith(currentYear)).reduce((s, e) => s + Number(e.amount || 0), 0);
+    const yearRM = (Array.isArray(pcEntries) ? pcEntries : []).filter(r => r.entry_date?.startsWith(currentYear)).reduce((s, r) => s + (Number(r.qty || 0) * Number(r.rate || 0)), 0);
+    const yearExpense = yearMaint + yearRM;
+    const netAvailable = newLock - yearExpense;
+
+    return `💵 *FUNDS ${isSubtract ? 'DEDUCTED' : 'ADDED'}!* (Add Funds)\n━━━━━━━━━━━━━━━━━━━━\n${isSubtract ? '➖' : '➕'} Amount: *${fmtINR(amount)}*\n${note ? `📝 Note: *${note}*\n` : ''}━━━━━━━━━━━━━━━━━━━━\n📊 *UPDATED BALANCES:*\n• Base Total Money: *${fmtINR(newTotal)}*\n• Lock Amount: *${fmtINR(newLock)}*\n• Net Available Money: *${fmtINR(netAvailable)}*\n━━━━━━━━━━━━━━━━━━━━\n_Website dashboard synced!_`;
+  }
+
+  // ── BALANCE / PAISA ──────────────────────────────────────────────────────
   if (/balance|paisa|cash/.test(t)) {
     const currentYear = new Date().getFullYear().toString();
     const [expenses, settings, pcEntries] = await Promise.all([
@@ -389,17 +508,137 @@ async function handleText(text) {
     const totalMoney = lockMoney - (yearMaint + yearRM);
     return `💰 *CASH BALANCE*\nHaath mein paisa: *${fmtINR(totalMoney)}*\nLock Amount: *${fmtINR(lockMoney)}*`;
   }
+
+  // ── SELLS ADD ENTRY (TRIGGER WIZARD OR FAST SINGLE LINE) ─────────────────
+  if (/sell|bikri/.test(t) && /add|jodo|karo|entry|dalo|naya|bill/.test(t)) {
+    const nums = text.match(/[\d,]+\.?\d*/g)?.map(n => parseFloat(n.replace(/,/g, ''))) || [];
+
+    // If single line contains 3+ numbers (e.g. sell add Mahesh 2 200 200 gadi 500) -> fast add!
+    if (nums.length >= 3) {
+      const nameMatch = text.match(/(?:sell|bikri)\s+(?:add|entry|karo|jodo|dalo|naya|bill)\s+(.+?)(?:\s+[\d,]+)/i);
+      const name = nameMatch?.[1]?.trim() || 'Unknown';
+      const qty = nums[0];
+      const rate = nums[1];
+      const payment = nums[2];
+      const gadiMatch = t.match(/gadi\s+(?:bhada\s+)?([\d,]+)/);
+      const gadiBhada = gadiMatch ? parseFloat(gadiMatch[1].replace(/,/g, '')) : 0;
+      const entryDate = today();
+      const totalAmt = qty * rate;
+
+      const serialCheck = await supabase('GET', 'sells?select=serial_number&order=serial_number.desc&limit=1');
+      const newSerial = (Number(serialCheck?.[0]?.serial_number) || 0) + 1;
+
+      const inserted = await supabase('POST', 'sells', {
+        entry_date: entryDate,
+        serial_number: newSerial,
+        name,
+        quantity: qty,
+        rate,
+        payment,
+        gadi_bhada: gadiBhada
+      });
+
+      const savedRow = Array.isArray(inserted) ? inserted[0] : inserted;
+      if (!savedRow?.id) {
+        return `❌ Sell entry save nahi hua.\nReason: ${savedRow?.message || 'Database error'}`;
+      }
+
+      lastInserted = { ...savedRow, _type: 'sell' };
+      const dateFmt = entryDate.split('-').reverse().join('-');
+      return `✅ *Sell Entry Add Ho Gayi!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${dateFmt}*\n👤 Name: *${name}*\n⚖️ Qty: *${qty} tons*\n💵 Rate: *₹${rate}/t*\n💰 Total: *${fmtINR(totalAmt)}*\n🚛 Gadi Bhada: *${fmtINR(gadiBhada)}*\n💳 Payment: *${fmtINR(payment)}*\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete ${name}" likho_`;
+    }
+
+    // Otherwise, START STEP-BY-STEP INTERACTIVE WIZARD!
+    wizardSessions.set(sender, { step: 'DATE', data: {} });
+    return `📝 *SELL BILL ENTRY WIZARD*\n━━━━━━━━━━━━━━━━━━━━\n📅 *Step 1/6: Date*\n\nTaareekh (DD-MM-YYYY) bataiye (e.g. *24-08-2026* ya *"today"*):`;
+  }
+
+  // ── SELLS REPORT ─────────────────────────────────────────────────────────
+  if (/sell|bikri|becha/.test(t)) {
+    const month = currentMonth(); const todayDate = today();
+    const sells = await supabase('GET', 'sells?select=quantity,payment,entry_date,name&order=entry_date.desc&limit=5');
+    const arr = Array.isArray(sells) ? sells : [];
+    const monthQty = arr.filter(e => e.entry_date?.startsWith(month)).reduce((s, e) => s + Number(e.quantity || 0), 0);
+    const todayQty = arr.filter(e => e.entry_date === todayDate).reduce((s, e) => s + Number(e.quantity || 0), 0);
+    const last5 = arr.slice(0, 5).map(e => `• ${e.entry_date?.slice(5).split('-').reverse().join('-')} — ${e.name} — ${Number(e.quantity).toFixed(3)} t — *${fmtINR(e.payment)}*`).join('\n');
+    return `🛒 *SELL (BIKRI) REPORT*\nIs Mahine ki Qty: *${monthQty.toFixed(3)} tons*\nAaj ki Qty: *${todayQty.toFixed(3)} tons*\n━━━━━━━━━━━━━━━━━━━━\n*Last 5 Entries:*\n${last5 || 'Koi entry nahi'}\n\n_Sell bill add karne ke liye "sell entry add" likho!_`;
+  }
+
+  // ── EXCEL / PDF ──────────────────────────────────────────────────────────
+  if (/excel|csv/.test(t)) {
+    const [expenses, sells] = await Promise.all([
+      supabase('GET', 'expenses?select=entry_date,name,amount,category&order=entry_date.desc&limit=20'),
+      supabase('GET', 'sells?select=entry_date,quantity,payment&order=entry_date.desc&limit=10')
+    ]);
+    const expLines = (Array.isArray(expenses) ? expenses : []).map(e => `${e.entry_date} | ${e.name} | ₹${e.amount} | ${e.category}`).join('\n');
+    const sellLines = (Array.isArray(sells) ? sells : []).map(e => `${e.entry_date} | ${Number(e.quantity).toFixed(3)} t | ₹${e.payment}`).join('\n');
+    return `📋 *DATA EXPORT (Last 20 Expenses)*\n━━━━━━━━━━━━━━━━━━━━\n*Date | Name | Amount | Category*\n${expLines}\n\n━━━━━━━━━━━━━━━━━━━━\n*SELLS (Last 10)*\n*Date | Qty | Payment*\n${sellLines}\n\n_Full export: https://total-raw-material-v2.vercel.app_`;
+  }
+
+  if (/pdf/.test(t)) {
+    return `📄 *PDF Export*\nPDF seedha WhatsApp pe nahi bhej sakte.\nPura data yahan dekho:\n🔗 https://total-raw-material-v2.vercel.app\n\n_Browser mein Ctrl+P se PDF save kar sakte ho._`;
+  }
+
+  // ── TODAY / AAJ ──────────────────────────────────────────────────────────
+  if (/aaj|today|kal|abhi/.test(t)) return generateReport();
+
+  // ── SMART DELETE SEARCH BY NAME / DATE ───────────────────────────────────
   if (/delete|galat|undo|hatao|nikal/.test(t)) {
-    if (!lastInserted) return '❌ Koi recent entry nahi mili.';
-    await supabase('DELETE', `expenses?id=eq.${lastInserted.id}`);
-    const e = lastInserted; lastInserted = null;
-    return `🗑️ *Deleted:*\n${e.name} — ${fmtINR(e.amount)}\n(${e.entry_date})`;
+    const query = t.replace(/delete|galat|undo|hatao|nikal|karna|hai|entry|last|sell|expense/gi, '').trim();
+
+    if (!query) {
+      if (!lastInserted) return '❌ Koi recent entry nahi mili delete karne ke liye.';
+      const isSell = lastInserted._type === 'sell';
+      const table = isSell ? 'sells' : 'expenses';
+      await supabase('DELETE', `${table}?id=eq.${lastInserted.id}`);
+      const e = lastInserted; lastInserted = null;
+      return `🗑️ *Deleted Last Entry!*\n${isSell ? `👤 ${e.name} — ${e.quantity} t` : e.name} — ${fmtINR(isSell ? e.payment : e.amount)}\nDate: ${e.entry_date}`;
+    }
+
+    // Search query in sells table first by name or date
+    let sellsMatch = await supabase('GET', `sells?name=ilike.*${encodeURIComponent(query)}*&order=entry_date.desc&limit=1`);
+    if ((!Array.isArray(sellsMatch) || sellsMatch.length === 0) && /\d/.test(query)) {
+      const parsedDate = parseDateInput(query);
+      sellsMatch = await supabase('GET', `sells?entry_date=eq.${parsedDate}&order=created_at.desc&limit=1`);
+    }
+
+    if (Array.isArray(sellsMatch) && sellsMatch.length > 0) {
+      const row = sellsMatch[0];
+      await supabase('DELETE', `sells?id=eq.${row.id}`);
+      const dateFmt = row.entry_date?.split('-').reverse().join('-');
+      return `🗑️ *Deleted Sell Entry!*\n━━━━━━━━━━━━━━━━━━━━\n👤 Name: *${row.name}*\n📅 Date: *${dateFmt}*\n⚖️ Qty: *${row.quantity} tons*\n💳 Payment: *${fmtINR(row.payment)}*`;
+    }
+
+    // Search query in expenses table by name or date
+    let expMatch = await supabase('GET', `expenses?name=ilike.*${encodeURIComponent(query)}*&order=entry_date.desc&limit=1`);
+    if ((!Array.isArray(expMatch) || expMatch.length === 0) && /\d/.test(query)) {
+      const parsedDate = parseDateInput(query);
+      expMatch = await supabase('GET', `expenses?entry_date=eq.${parsedDate}&order=created_at.desc&limit=1`);
+    }
+
+    if (Array.isArray(expMatch) && expMatch.length > 0) {
+      const row = expMatch[0];
+      await supabase('DELETE', `expenses?id=eq.${row.id}`);
+      const dateFmt = row.entry_date?.split('-').reverse().join('-');
+      return `🗑️ *Deleted Expense Entry!*\n━━━━━━━━━━━━━━━━━━━━\n📝 Name: *${row.name}*\n📅 Date: *${dateFmt}*\n💰 Amount: *${fmtINR(row.amount)}*`;
+    }
+
+    return `❌ *Koi entry nahi mili matching "${query}".*\nCheck karein naam ya date sahi hai.`;
   }
-  if (/help|commands/.test(t)) {
-    return `🤖 *BOT COMMANDS*\n━━━━━━━━━━━━━━━━━━━━\n📸 *Photo bhejo* — PhonePe screenshot\n📊 *report* — Full report\n⛽ *petrol report* — Petrol details\n👷 *operator report* — Majuri details\n💰 *balance* — Cash balance\n🗑️ *delete last* — Last entry hatao\n━━━━━━━━━━━━━━━━━━━━`;
+
+  // ── HELP ──────────────────────────────────────────────────────────────────
+  if (/help|commands|kya kare|kya karna/.test(t)) {
+    return `🤖 *BOT COMMANDS*\n━━━━━━━━━━━━━━━━━━━━\n📸 *Photo bhejo* — PhonePe screenshot auto-entry\n📝 *sell entry add* — Step-by-step sell wizard\n📊 *report* — Full dashboard\n⛽ *petrol* — Petrol/Diesel details\n👷 *operator* — Majuri details\n🛒 *sell* — Sales details\n📦 *stock* — Haath mein maal\n💰 *balance* — Cash balance\n📋 *excel* — Data export\n🔒 *lock add 5000* — Lock amount mein jodo\n🗑️ *delete jayesh* — Delete entry by name/date\n━━━━━━━━━━━━━━━━━━━━`;
   }
-  return null;
+
+  // ── TOTAL / KITNA / QTY ───────────────────────────────────────────────────
+  if (/total|kitna|qty|quantity|amount|kitne|paise|rupee/.test(t)) return generateReport();
+
+  // ── FALLBACK — never ignore any message ───────────────────────────────────
+  return `🤖 *Samajh nahi aaya!*\n"_${text.slice(0, 40)}_"\n\nYeh commands try karo:\n• *sell entry add* — Add sell bill\n• *report* — Full data\n• *petrol* — Petrol details\n• *stock* — Maal balance\n• *balance* — Cash balance\n• *delete [name]* — Delete entry\n\n📸 _PhonePe screenshot bhejo for auto-entry_`;
 }
+
+let currentSock = null;
 
 // ─── MAIN BOT ──────────────────────────────────────────────────────────────
 async function startBot() {
@@ -414,7 +653,7 @@ async function startBot() {
   const sock = makeWASocket({
     version,
     auth: state,
-    logger: pino({ level: 'silent' }),
+    logger: pino({ level: 'silent' }), // silent = no debug spam
     printQRInTerminal: false,
     browser: ['Ubuntu', 'Chrome', '20.0.04'],
     markOnlineOnConnect: false,
@@ -422,28 +661,22 @@ async function startBot() {
   });
   currentSock = sock;
 
+  // Save credentials on update
   sock.ev.on('creds.update', saveCreds);
 
+  // Connection updates
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      console.log('\n📱 New QR code generated. Visit your web URL to scan!\n');
-      qrcodeTerm.generate(qr, { small: true });
-      try {
-        latestQRDataURL = await QRCode.toDataURL(qr);
-      } catch (err) {
-        console.error('QR image render error:', err);
-      }
+      console.log('\n📱 SCAN THIS QR CODE WITH YOUR WHATSAPP:\n');
+      qrcode.generate(qr, { small: true });
+      console.log('\nWhatsApp → Settings → Linked Devices → Link a Device → Scan\n');
     }
     if (connection === 'open') {
-      isBotConnected = true;
-      latestQRDataURL = null;
-      latestPairingCode = null;
       console.log('\n✅ WhatsApp Bot is LIVE and ready!');
       console.log(`✅ Listening to group: "${TARGET_GROUP}"`);
       console.log('✅ Forward any PhonePe screenshot to the group to add expenses.\n');
     }
     if (connection === 'close') {
-      isBotConnected = false;
       const code = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = code !== DisconnectReason.loggedOut;
       console.log('⚠️ Connection closed. Code:', code, '| Reconnecting:', shouldReconnect);
@@ -455,85 +688,70 @@ async function startBot() {
     }
   });
 
+  // Messages
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     for (const msg of messages) {
       try {
         if (!msg.key.remoteJid) continue;
 
+        // Get chat info
         const jid = msg.key.remoteJid;
         const isGroup = jid.endsWith('@g.us');
-        let isTargetGroup = false;
+        if (!isGroup) continue;
 
-        if (isGroup) {
-          const groupMeta = await sock.groupMetadata(jid).catch(() => null);
-          if (groupMeta && groupMeta.subject) {
-            if (groupMeta.subject.toLowerCase().includes('total raw material')) {
-              isTargetGroup = true;
-            }
-          } else {
-            // Allow if metadata check temporary fails
-            isTargetGroup = true;
-          }
-        } else {
-          // Allow Direct Messages (DMs) to the bot as well
-          isTargetGroup = true;
-        }
-
-        if (!isTargetGroup) continue;
+        // Get group name
+        const groupMeta = await sock.groupMetadata(jid).catch(() => null);
+        if (!groupMeta || groupMeta.subject !== TARGET_GROUP) continue;
 
         const msgContent = msg.message;
         if (!msgContent) continue;
 
+        // Skip messages that are bot's own replies (to prevent loops)
         const textContent = msgContent.conversation || msgContent.extendedTextMessage?.text || '';
-        // Skip messages sent by the bot itself
-        if (msg.key.fromMe) continue;
-        const botPrefixes = ['⏳', '✅', '❌', '⚠️', '📊', '💰', '⛽', '👷', '🗑️', '🤖'];
-        if (textContent && botPrefixes.some(p => textContent.startsWith(p))) {
-          continue;
+        const BOT_REPLY_PREFIXES = [
+          '⏳', '✅', '❌', '⚠️', // status messages
+          '📊', '💰', '⛽', '👷', '🗑️', '🤖', '💵', // report & money messages
+          '📦 *STOCK', '🔒 *Lock', '🛒 *SELL', '📋 *DATA', '📄 *PDF', '📝', '👤', '⚖️', '💳', '🚛', // wizard & command replies
+          '📅', // date lines in reports
+        ];
+        if (textContent && BOT_REPLY_PREFIXES.some(p => textContent.startsWith(p))) {
+          continue; // skip own bot replies
         }
+
 
         console.log(`📨 Message in "${TARGET_GROUP}" | fromMe: ${msg.key.fromMe} | Type: ${Object.keys(msgContent).join(', ')}`);
 
+        // ── IMAGE: PhonePe Screenshot ─────────────────────────────────────
+        const imgMsg = msgContent.imageMessage || msgContent.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
         const actualImg = msgContent.imageMessage;
 
         if (actualImg) {
           console.log('🖼️ Image detected! Processing...');
           await sock.sendMessage(jid, { text: '⏳ Screenshot padh raha hoon...' });
 
+          // Download image
           const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-          let buffer;
-          try {
-            buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
-          } catch (dlErr) {
-            console.error('Download error:', dlErr.message);
-            await sock.sendMessage(jid, { text: '❌ Image download failed. Dubara bhejiye.' });
-            continue;
-          }
+          const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
           const base64 = buffer.toString('base64');
           const mime = actualImg.mimetype || 'image/jpeg';
-
-          console.log(`📦 Image size: ${Math.round(buffer.length/1024)}KB, mime: ${mime}`);
 
           let data;
           try {
             data = await processPhonePeImage(base64, mime);
           } catch (e) {
             console.error('Gemini error:', e.message);
-            data = null;
+            await sock.sendMessage(jid, { text: '❌ Screenshot read nahi hua. Clear image bhejiye.' });
+            continue;
           }
 
           console.log('📋 Gemini extracted:', JSON.stringify(data));
 
-          if (!data || (!data.amount && !data.transaction_id && !data.paid_to_name)) {
-            await sock.sendMessage(jid, { text: '⚠️ PhonePe receipt details nahi mila.\nKripya sirf PhonePe payment screenshot bhejiye.' });
+          if (!data.amount) {
+            await sock.sendMessage(jid, { text: '❌ Amount nahi mila. Check karein.' });
             continue;
           }
 
-          if (!data.amount || data.amount === null) {
-            await sock.sendMessage(jid, { text: `⚠️ Amount detect nahi hua.\nPaid to: ${data.paid_to_name || 'N/A'}\nKripya amount clearly visible screenshot bhejiye.` });
-            continue;
-          }
-
+          // Duplicate check
           if (data.transaction_id) {
             try {
               const dup = await supabase('GET', `expenses?phonepay_txn_id=eq.${data.transaction_id}&select=id,name,amount`);
@@ -577,11 +795,13 @@ async function startBot() {
             text: `✅ *Entry Add Ho Gayi!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${dateFmt}*\n💰 Amount: *${fmtINR(data.amount)}*\n📝 Name: *${entryName}*\n🏷️ Category: *${catLabel}*\n🔖 Txn ID: ${data.transaction_id || 'N/A'}\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete last" likho_`
           });
 
+        // ── TEXT COMMAND ──────────────────────────────────────────────────
         } else {
           const text = msgContent.conversation || msgContent.extendedTextMessage?.text || '';
           if (!text) continue;
           console.log(`💬 Text: "${text}"`);
-          const reply = await handleText(text);
+          const sender = msg.key.participant || msg.key.remoteJid;
+          const reply = await handleText(text, sender);
           if (reply) await sock.sendMessage(jid, { text: reply });
         }
 
