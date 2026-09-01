@@ -28,6 +28,11 @@ let botStatus = 'Starting...';
 
 // ─── HTTP DASHBOARD (Serves Pairing Code & Keeps Render Awake) ──────────────
 http.createServer((req, res) => {
+  if (req.url === '/ping' || req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    return res.end('PONG_OK');
+  }
+
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(`
     <!DOCTYPE html>
@@ -70,6 +75,17 @@ http.createServer((req, res) => {
 }).listen(PORT, () => {
   console.log(`🌐 Web Dashboard listening on port ${PORT}`);
 });
+
+// ─── SELF-PINGER TIMER (Prevents Render Free Tier 15-min Sleep) ─────────────
+const RENDER_SERVICE_URL = process.env.RENDER_EXTERNAL_URL || 'https://total-raw-material-v2.onrender.com';
+setInterval(() => {
+  try {
+    const pingUrl = `${RENDER_SERVICE_URL}/ping`;
+    https.get(pingUrl, (res) => {
+      console.log(`📡 Keep-Alive pulse sent to Render (Status: ${res.statusCode})`);
+    }).on('error', () => {});
+  } catch {}
+}, 4 * 60 * 1000); // Ping every 4 minutes
 
 // ─── HELPERS ───────────────────────────────────────────────────────────────
 function fmtINR(n) {
