@@ -766,21 +766,25 @@ async function startBot() {
 
   sock.ev.on('creds.update', saveCreds);
 
-  // Request Pairing Code if not registered
-  if (!sock.authState.creds.registered) {
+  // Request Pairing Code if not registered and no code requested yet
+  if (!sock.authState.creds.registered && !currentPairingCode) {
     setTimeout(async () => {
+      if (currentPairingCode || sock.authState.creds.registered) return;
       try {
         const cleanNumber = PHONE_NUMBER.replace(/[^0-9]/g, '');
         const code = await sock.requestPairingCode(cleanNumber);
         currentPairingCode = code;
         botStatus = `Pairing Code: ${code}`;
         console.log('\n==================================================');
-        console.log(`🔑 YOUR WHATSAPP PAIRING CODE IS: ${code}`);
+        console.log(`🔑 YOUR STABLE WHATSAPP PAIRING CODE IS: ${code}`);
         console.log(`📱 Phone Number: +${cleanNumber}`);
         console.log('==================================================');
         console.log('Open WhatsApp → Settings → Linked Devices → Link with phone number instead → Enter code!\n');
       } catch (e) {
-        console.error('Failed to request pairing code:', e?.message || e);
+        // If code request failed, allow retry on next loop
+        if (!e?.message?.includes('already')) {
+          console.error('Failed to request pairing code:', e?.message || e);
+        }
       }
     }, 3000);
   }
