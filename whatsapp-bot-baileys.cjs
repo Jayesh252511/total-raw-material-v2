@@ -254,9 +254,17 @@ Extract the main payment details into JSON format:
     { inline_data: { mime_type: mimeType, data: imageBase64 } },
     { text: prompt }
   ]);
+
+  console.log('🤖 Gemini raw response:', text ? text.slice(0, 500) : '(empty)');
+
+  if (!text) return null;
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('No JSON in Gemini response');
-  return JSON.parse(match[0]);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[0]);
+  } catch {
+    return null;
+  }
 }
 
 function parseDate(dateStr) {
@@ -477,7 +485,9 @@ async function startBot() {
         if (!msgContent) continue;
 
         const textContent = msgContent.conversation || msgContent.extendedTextMessage?.text || '';
-        const botPrefixes = ['⏳ Screenshot', '✅ *Entry', '❌', '⚠️ *Duplicate', '📊 *TOTAL', '💰 *Cash', '⛽ *PETROL', '👷 *OPERATOR', '🗑️ *Deleted', '🤖 *BOT'];
+        // Skip messages sent by the bot itself
+        if (msg.key.fromMe) continue;
+        const botPrefixes = ['⏳', '✅', '❌', '⚠️', '📊', '💰', '⛽', '👷', '🗑️', '🤖'];
         if (textContent && botPrefixes.some(p => textContent.startsWith(p))) {
           continue;
         }
@@ -491,23 +501,36 @@ async function startBot() {
           await sock.sendMessage(jid, { text: '⏳ Screenshot padh raha hoon...' });
 
           const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-          const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
+          let buffer;
+          try {
+            buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
+          } catch (dlErr) {
+            console.error('Download error:', dlErr.message);
+            await sock.sendMessage(jid, { text: '❌ Image download failed. Dubara bhejiye.' });
+            continue;
+          }
           const base64 = buffer.toString('base64');
           const mime = actualImg.mimetype || 'image/jpeg';
+
+          console.log(`📦 Image size: ${Math.round(buffer.length/1024)}KB, mime: ${mime}`);
 
           let data;
           try {
             data = await processPhonePeImage(base64, mime);
           } catch (e) {
             console.error('Gemini error:', e.message);
-            await sock.sendMessage(jid, { text: '❌ Screenshot read nahi hua. Clear image bhejiye.' });
-            continue;
+            data = null;
           }
 
           console.log('📋 Gemini extracted:', JSON.stringify(data));
 
-          if (!data.amount) {
-            await sock.sendMessage(jid, { text: '❌ Amount nahi mila. Check karein.' });
+          if (!data || (!data.amount && !data.transaction_id && !data.paid_to_name)) {
+            await sock.sendMessage(jid, { text: '⚠️ PhonePe receipt details nahi mila.\nKripya sirf PhonePe payment screenshot bhejiye.' });
+            continue;
+          }
+
+          if (!data.amount || data.amount === null) {
+            await sock.sendMessage(jid, { text: `⚠️ Amount detect nahi hua.\nPaid to: ${data.paid_to_name || 'N/A'}\nKripya amount clearly visible screenshot bhejiye.` });
             continue;
           }
 
