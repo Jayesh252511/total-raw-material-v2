@@ -186,6 +186,46 @@ Use null for missing fields.`;
   return JSON.parse(match[0]);
 }
 
+// ─── PROCESS VOICE AUDIO NOTE ──────────────────────────────────────────────
+async function processVoiceAudio(audioBase64, mimeType) {
+  const prompt = `You are an AI voice assistant for a raw material business in India (selling stone/aggregate/sand by tons).
+Listen carefully to this audio voice note (which may be in Hindi, Hinglish, Marathi, Gujarati, or English).
+Transcribe what the speaker is saying, and convert it into a clear text command for our bot.
+
+Examples of voice commands:
+- If speaker says: "Mahesh ko 2 ton becha 200 rate se bhada 100 payment 300"
+  command: "sell add mahesh 2 200 300 gadi 100"
+- If speaker says: "Sell bill add karna hai"
+  command: "sell bill add"
+- If speaker says: "Kitna maal bacha hai" or "Haath me maal kitna hai"
+  command: "stock"
+- If speaker says: "Report dikhao" or "Aaj ka report"
+  command: "report"
+- If speaker says: "August month report" or "August ki report"
+  command: "august report"
+- If speaker says: "Petrol 500 rs add karo"
+  command: "petrol 500"
+- If speaker says: "Lock amount 5000 add karo"
+  command: "lock add 5000"
+- If speaker says: "Mahesh entry delete karo"
+  command: "delete mahesh"
+
+Return ONLY a valid JSON object:
+{
+  "transcript": "<Exact transcription in original spoken language>",
+  "command": "<Clean parsed command string>"
+}`;
+
+  const text = await callGemini([
+    { inline_data: { mime_type: mimeType || 'audio/ogg; codecs=opus', data: audioBase64 } },
+    { text: prompt }
+  ]);
+
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('No JSON in Gemini audio response');
+  return JSON.parse(match[0]);
+}
+
 function parseDate(dateStr) {
   if (!dateStr) return today();
   try {
@@ -927,7 +967,41 @@ async function startBot() {
       currentPairingCode = null;
       console.log('\n✅ WhatsApp Bot is LIVE and ready!');
       console.log(`✅ Listening to group: "${TARGET_GROUP}"`);
-      console.log('✅ Forward any PhonePe screenshot to the group to add expenses.\n');
+      console.log('✅ Forward any PhonePe screenshot to the group to add expenses.');
+      console.log('✅ Send any Audio Voice Note to auto-transcribe and process commands!\n');
+
+      // ── 8:00 PM AUTOMATIC DAILY CLOSING BULLETIN SCHEDULE ──────────────────
+      if (!global.bulletinInterval) {
+        let lastBulletinDate = '';
+        global.bulletinInterval = setInterval(async () => {
+          try {
+            const now = new Date();
+            const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+            const hours = ist.getUTCHours();
+            const minutes = ist.getUTCMinutes();
+            const dateStr = ist.toISOString().split('T')[0];
+
+            // Trigger at 8:00 PM IST (20:00 IST)
+            if (hours === 20 && minutes === 0 && lastBulletinDate !== dateStr) {
+              lastBulletinDate = dateStr;
+              console.log('📢 Triggering 8:00 PM Daily Closing Bulletin...');
+              if (currentSock) {
+                const groups = await currentSock.groupFetchAllParticipating().catch(() => ({}));
+                const group = Object.values(groups).find(g => g.subject === TARGET_GROUP);
+                if (group?.id) {
+                  const rpt = await generateReport();
+                  const dateFmt = dateStr.split('-').reverse().join('-');
+                  const bulletinHeader = `📢 *DAILY EVENING CLOSING BULLETIN (8:00 PM)*\n📅 Date: *${dateFmt}*\n━━━━━━━━━━━━━━━━━━━━\n`;
+                  await currentSock.sendMessage(group.id, { text: bulletinHeader + rpt });
+                  console.log('✅ Daily 8:00 PM Bulletin posted to WhatsApp group!');
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Bulletin timer error:', e?.message || e);
+          }
+        }, 45000);
+      }
     }
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
@@ -964,7 +1038,7 @@ async function startBot() {
         const textContent = msgContent.conversation || msgContent.extendedTextMessage?.text || '';
         const BOT_REPLY_PREFIXES = [
           '⏳', '✅', '❌', '⚠️', // status messages
-          '📊', '💰', '⛽', '👷', '🗑️', '🤖', '💵', // report & money messages
+          '📊', '💰', '⛽', '👷', '🗑️', '🤖', '💵', '📢', '🎙️', // report & voice messages
           '📦 *STOCK', '🔒 *Lock', '🛒 *SELL', '📋 *DATA', '📄 *PDF', '📝', '👤', '⚖️', '💳', '🚛', // wizard & command replies
           '📅', // date lines in reports
         ];
@@ -972,8 +1046,37 @@ async function startBot() {
           continue; // skip own bot replies
         }
 
-
         console.log(`📨 Message in "${TARGET_GROUP}" | fromMe: ${msg.key.fromMe} | Type: ${Object.keys(msgContent).join(', ')}`);
+
+        // ── AUDIO VOICE NOTE ("Bolee Bot") ──────────────────────────────────
+        const audioMsg = msgContent.audioMessage || msgContent.pttMessage;
+        if (audioMsg) {
+          console.log('🎙️ Audio Voice Note detected! Processing with Gemini...');
+          await sock.sendMessage(jid, { text: '🎙️ *Aapka voice note sun raha hoon...*' });
+
+          const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+          const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
+          const base64 = buffer.toString('base64');
+          const mime = audioMsg.mimetype || 'audio/ogg; codecs=opus';
+
+          let audioResult;
+          try {
+            audioResult = await processVoiceAudio(base64, mime);
+          } catch (e) {
+            console.error('Voice audio error:', e.message);
+            await sock.sendMessage(jid, { text: '❌ Voice note samajh nahi aaya. Kripya dobara clear bolein.' });
+            continue;
+          }
+
+          console.log(`🎙️ Voice Transcript: "${audioResult.transcript}" | Command: "${audioResult.command}"`);
+
+          const sender = msg.key.participant || msg.key.remoteJid;
+          const replyText = await handleText(audioResult.command, sender);
+
+          const voiceHeader = `🎙️ *Voice Note Received:* "${audioResult.transcript}"\n━━━━━━━━━━━━━━━━━━━━\n`;
+          await sock.sendMessage(jid, { text: voiceHeader + replyText });
+          continue;
+        }
 
         // ── IMAGE: PhonePe Screenshot ─────────────────────────────────────
         const imgMsg = msgContent.imageMessage || msgContent.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
