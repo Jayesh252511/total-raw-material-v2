@@ -713,33 +713,25 @@ async function startBot() {
   });
   currentSock = sock;
 
-  // Request 8-digit Pairing Code for Phone Number if not registered
-  if (!sock.authState.creds.registered) {
-    setTimeout(async () => {
+  // Save credentials on update
+  sock.ev.on('creds.update', saveCreds);
+
+  // Connection updates
+  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+    if (qr && !sock.authState.creds.registered && !currentPairingCode) {
       try {
         const cleanNumber = PHONE_NUMBER.replace(/[^0-9]/g, '');
         const code = await sock.requestPairingCode(cleanNumber);
         currentPairingCode = code;
         botStatus = `Pairing Code: ${code}`;
         console.log('\n==================================================');
-        console.log(`🔑 YOUR WHATSAPP PAIRING CODE: ${code}`);
+        console.log(`🔑 YOUR WHATSAPP PAIRING CODE IS: ${code}`);
         console.log(`📱 Phone Number: +${cleanNumber}`);
         console.log('==================================================');
         console.log('Open WhatsApp → Settings → Linked Devices → Link with phone number instead → Enter code!\n');
       } catch (e) {
         console.error('Failed to request pairing code:', e?.message || e);
       }
-    }, 4000);
-  }
-
-  // Save credentials on update
-  sock.ev.on('creds.update', saveCreds);
-
-  // Connection updates
-  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
-    if (qr) {
-      console.log('\n📱 SCAN THIS QR CODE WITH YOUR WHATSAPP (Or use Pairing Code above):\n');
-      qrcode.generate(qr, { small: true });
     }
     if (connection === 'open') {
       botStatus = 'LIVE & READY';
