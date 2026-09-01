@@ -985,13 +985,12 @@ async function useCombinedAuthState(folder) {
 const groupSubjectCache = new Map();
 
 async function isTargetGroup(sock, jid) {
-  if (!jid) return false;
-  if (!jid.endsWith('@g.us')) return true; // Allow direct 1-on-1 chat to bot
+  if (!jid || !jid.endsWith('@g.us')) return false; // STRICT: Ignore ALL personal DMs and personal chats!
 
   function matchesTargetGroup(subj) {
     if (!subj) return false;
     const s = subj.trim().toLowerCase();
-    return s.includes('total raw material') || s.includes('total-raw-material') || s === TARGET_GROUP.trim().toLowerCase();
+    return s.includes('total raw material') || s === TARGET_GROUP.trim().toLowerCase();
   }
 
   if (groupSubjectCache.has(jid)) {
