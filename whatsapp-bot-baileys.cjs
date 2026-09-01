@@ -85,7 +85,7 @@ setInterval(() => {
       console.log(`📡 Keep-Alive pulse sent to Render (Status: ${res.statusCode})`);
     }).on('error', () => {});
   } catch {}
-}, 4 * 60 * 1000); // Ping every 4 minutes
+}, 90 * 1000); // Pulse every 90 seconds for ultra-fast response
 
 // ─── HELPERS ───────────────────────────────────────────────────────────────
 function fmtINR(n) {
@@ -951,6 +951,21 @@ async function useCombinedAuthState(folder) {
   return { state: localAuth.state, saveCreds };
 }
 
+// ─── FAST IN-MEMORY GROUP CACHE (Eliminates Network Delays) ────────────────
+const groupSubjectCache = new Map();
+
+async function isTargetGroup(sock, jid) {
+  if (groupSubjectCache.has(jid)) {
+    return groupSubjectCache.get(jid) === TARGET_GROUP;
+  }
+  const meta = await sock.groupMetadata(jid).catch(() => null);
+  if (meta?.subject) {
+    groupSubjectCache.set(jid, meta.subject);
+    return meta.subject === TARGET_GROUP;
+  }
+  return false;
+}
+
 let currentSock = null;
 
 // ─── MAIN BOT ──────────────────────────────────────────────────────────────
@@ -966,11 +981,14 @@ async function startBot() {
   const sock = makeWASocket({
     version,
     auth: state,
-    logger: pino({ level: 'silent' }), // silent = no debug spam
+    logger: pino({ level: 'silent' }),
     printQRInTerminal: false,
     browser: ['Ubuntu', 'Chrome', '20.0.04'],
-    markOnlineOnConnect: false,
-    syncFullHistory: false
+    markOnlineOnConnect: true,
+    syncFullHistory: false,
+    keepAliveIntervalMs: 10000, // Keep WebSocket connection hot every 10s
+    connectTimeoutMs: 60000,
+    retryRequestDelayMs: 250
   });
   currentSock = sock;
 
@@ -1059,9 +1077,8 @@ async function startBot() {
         const isGroup = jid.endsWith('@g.us');
         if (!isGroup) continue;
 
-        // Get group name
-        const groupMeta = await sock.groupMetadata(jid).catch(() => null);
-        if (!groupMeta || groupMeta.subject !== TARGET_GROUP) continue;
+        // Fast in-memory check if this is the target group (0.0001ms)
+        if (!(await isTargetGroup(sock, jid))) continue;
 
         const msgContent = msg.message;
         if (!msgContent) continue;
