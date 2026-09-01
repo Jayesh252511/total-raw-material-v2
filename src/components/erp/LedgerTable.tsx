@@ -17,6 +17,9 @@ const formatDate = (dateStr: string) => {
   if (!dateStr) return "";
   const parts = dateStr.split("-");
   if (parts.length === 3) {
+    const year = parts[0].slice(-2);
+    const month = parts[1];
+    const day = parts[2];
     return `${day}-${month}-${year}`;
   }
   return dateStr;
