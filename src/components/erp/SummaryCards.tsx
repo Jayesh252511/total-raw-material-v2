@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { TrendingUp, TrendingDown, Wallet, Package, Receipt, Wrench, Calendar, CalendarDays, ShoppingCart, Lock, Coins } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { fmtINR, fmtTons } from "@/lib/format";
@@ -18,7 +18,7 @@ function Sparkline({ tone }: { tone: string }) {
   const strokeColor = tone === 'success' ? '#10b981' : tone === 'warning' ? '#f59e0b' : tone === 'danger' ? '#f43f5e' : tone === 'info' ? '#38bdf8' : '#6366f1';
   const isDown = tone === 'danger';
   return (
-    <svg className="w-14 h-6 opacity-70 group-hover:opacity-100 transition-opacity" viewBox="0 0 60 25" fill="none">
+    <svg className="w-12 h-5 opacity-65 group-hover:opacity-100 transition-opacity" viewBox="0 0 60 25" fill="none">
       <path
         d={isDown ? "M 2 5 Q 15 10, 30 18 T 58 22" : "M 2 20 Q 15 15, 30 10 T 58 3"}
         stroke={strokeColor}
@@ -50,32 +50,28 @@ function Card({ s }: { s: Stat }) {
     <Comp
       onClick={s.onClick}
       className={cn(
-        "group relative rounded-xl border bg-card/80 backdrop-blur-md p-3.5 sm:p-4 shadow-soft transition-all duration-300 hover:shadow-lg hover:-translate-y-1 text-left w-full overflow-hidden",
+        "group relative rounded-xl border bg-card/90 backdrop-blur-md p-3.5 sm:p-4 shadow-soft transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 text-left w-full overflow-hidden flex flex-col justify-between min-h-[102px]",
         glowMap[s.tone ?? "primary"],
         s.onClick && "cursor-pointer hover:border-primary/50"
       )}
     >
-      <div className="flex items-start justify-between gap-2 sm:gap-3">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{s.label}</p>
-          <p className="mt-1.5 text-base sm:text-xl font-bold tracking-tight tabular-nums truncate">{s.value}</p>
-          {s.hint && <p className="text-[10px] sm:text-[11px] text-muted-foreground/80 mt-0.5 truncate">{s.hint}</p>}
+          <p className="mt-1 text-base sm:text-lg font-bold tracking-tight tabular-nums truncate">{s.value}</p>
         </div>
-        <div className={cn("flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl border transition-transform group-hover:scale-110", toneMap[s.tone ?? "primary"])}>
-          <Icon className="h-4.5 w-4.5 sm:h-5 sm:w-5" strokeWidth={2.2} />
+        <div className={cn("flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border transition-transform group-hover:scale-105", toneMap[s.tone ?? "primary"])}>
+          <Icon className="h-4 w-4" strokeWidth={2.2} />
         </div>
       </div>
-      <div className="mt-2.5 pt-2 border-t border-border/40 flex items-center justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Metrics</span>
+
+      <div className="mt-2 flex items-center justify-between gap-2 pt-1 border-t border-border/30">
+        <p className="text-[10px] text-muted-foreground truncate max-w-[65%]">{s.hint || "Live metric"}</p>
         <Sparkline tone={s.tone ?? 'primary'} />
       </div>
     </Comp>
   );
 }
-
-
-
-
 
 type Props = {
   totalMoney: number;
@@ -92,30 +88,85 @@ type Props = {
   yearRM: number;
 };
 
+type Category = "all" | "money" | "stock" | "expenses";
+
 export function SummaryCards(p: Props) {
   const [openTotal, setOpenTotal] = useState(false);
   const [openLock, setOpenLock] = useState(false);
-  const stats: Stat[] = [
-    { label: "Total Money", value: fmtINR(p.totalMoney), icon: Wallet, tone: "primary", hint: "Tap for history", onClick: () => setOpenTotal(true) },
-    { label: "Sell Received", value: fmtINR(p.sellMoney), icon: ShoppingCart, tone: "success", hint: "Total payment received from sells" },
-    { label: "Amt w/o GB (w/o GST)", value: fmtINR(p.sellWithoutGBNoGST), icon: Coins, tone: "success", hint: "Sell total without Gadi Bhada or GST" },
-    { label: "Lock Amount", value: fmtINR(p.lockMoney), icon: Lock, tone: "warning", hint: "Add-only · tap for history", onClick: () => setOpenLock(true) },
-    { label: "Total Stock", value: fmtTons(p.totalStock), icon: Package, tone: "info" },
-    { label: "Yearly Raw Material", value: fmtINR(p.yearRM), icon: Package, tone: "info" },
-    { label: "Today's Expense", value: fmtINR(p.todayExpense), icon: Receipt, tone: "warning", hint: "Material + Maint." },
-    { label: "Yearly Expense", value: fmtINR(p.yearExpense), icon: TrendingDown, tone: "danger" },
-    { label: "Today's Tons Used", value: fmtTons(p.todayTons), icon: Calendar, tone: "info" },
-    { label: "Yearly Tons Used", value: fmtTons(p.yearTons), icon: CalendarDays, tone: "info" },
-    { label: "Today's Maintenance", value: fmtINR(p.todayMaint), icon: Wrench, tone: "warning" },
-    { label: "Yearly Maintenance", value: fmtINR(p.yearMaint), icon: TrendingUp, tone: "success" },
+  const [activeCat, setActiveCat] = useState<Category>("all");
+
+  const allStats: (Stat & { cat: "money" | "stock" | "expenses" })[] = [
+    { label: "Total Money", value: fmtINR(p.totalMoney), icon: Wallet, tone: "primary", hint: "Tap for history", onClick: () => setOpenTotal(true), cat: "money" },
+    { label: "Sell Received", value: fmtINR(p.sellMoney), icon: ShoppingCart, tone: "success", hint: "Total payment received", cat: "money" },
+    { label: "Amt w/o GB (w/o GST)", value: fmtINR(p.sellWithoutGBNoGST), icon: Coins, tone: "success", hint: "Sell total excl. GB/GST", cat: "money" },
+    { label: "Lock Amount", value: fmtINR(p.lockMoney), icon: Lock, tone: "warning", hint: "Add-only · tap for history", onClick: () => setOpenLock(true), cat: "money" },
+
+    { label: "Total Stock", value: fmtTons(p.totalStock), icon: Package, tone: "info", hint: "Current stock balance", cat: "stock" },
+    { label: "Yearly Raw Material", value: fmtINR(p.yearRM), icon: Package, tone: "info", hint: "Purchased material cost", cat: "stock" },
+    { label: "Today's Tons Used", value: fmtTons(p.todayTons), icon: Calendar, tone: "info", hint: "Tons sold today", cat: "stock" },
+    { label: "Yearly Tons Used", value: fmtTons(p.yearTons), icon: CalendarDays, tone: "info", hint: "Total tons sold", cat: "stock" },
+
+    { label: "Today's Expense", value: fmtINR(p.todayExpense), icon: Receipt, tone: "warning", hint: "Material + Maint.", cat: "expenses" },
+    { label: "Yearly Expense", value: fmtINR(p.yearExpense), icon: TrendingDown, tone: "danger", hint: "All outgoings", cat: "expenses" },
+    { label: "Today's Maintenance", value: fmtINR(p.todayMaint), icon: Wrench, tone: "warning", hint: "Today's maintenance", cat: "expenses" },
+    { label: "Yearly Maintenance", value: fmtINR(p.yearMaint), icon: TrendingUp, tone: "success", hint: "Maintenance expenses", cat: "expenses" },
   ];
+
+  const filtered = activeCat === "all" ? allStats : allStats.filter(s => s.cat === activeCat);
+
   return (
-    <>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {stats.map((s) => <Card key={s.label} s={s} />)}
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
+        <div className="flex items-center gap-1.5 rounded-xl border border-border/60 bg-card/60 p-1 backdrop-blur-md">
+          <button
+            onClick={() => setActiveCat("all")}
+            className={cn(
+              "px-3 py-1 text-xs font-semibold rounded-lg transition-all",
+              activeCat === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+            )}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setActiveCat("money")}
+            className={cn(
+              "px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1",
+              activeCat === "money" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+            )}
+          >
+            💰 Money
+          </button>
+          <button
+            onClick={() => setActiveCat("stock")}
+            className={cn(
+              "px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1",
+              activeCat === "stock" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+            )}
+          >
+            📦 Stock
+          </button>
+          <button
+            onClick={() => setActiveCat("expenses")}
+            className={cn(
+              "px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1",
+              activeCat === "expenses" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+            )}
+          >
+            🔧 Expenses
+          </button>
+        </div>
+
+        <span className="text-xs font-medium text-muted-foreground whitespace-nowrap hidden sm:inline">
+          Showing {filtered.length} metrics
+        </span>
       </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {filtered.map((s) => <Card key={s.label} s={s} />)}
+      </div>
+
       <MoneyHistoryDialog open={openTotal} onOpenChange={setOpenTotal} field="total_money" title="Total Money — History" />
       <MoneyHistoryDialog open={openLock} onOpenChange={setOpenLock} field="lock_money" title="Lock Amount — History" />
-    </>
+    </div>
   );
 }
