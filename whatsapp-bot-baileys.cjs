@@ -188,7 +188,7 @@ function fetchExt(urlPath) {
 
 // ─── GEMINI API CALL (With Model Fallback) ─────────────────────────────────
 function callGemini(parts) {
-  const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+  const models = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.5-lite', 'gemini-2.5-flash-lite', 'gemini-flash-latest'];
   return new Promise((resolve) => {
     let attempt = 0;
 
@@ -1026,6 +1026,61 @@ async function isTargetGroup(sock, jid) {
   return false;
 }
 
+// ─── SUPABASE SESSION BACKUP & RESTORE (Eliminates Render Unlinking) ─────────
+async function restoreAuthFolderFromSupabase(folder) {
+  try {
+    if (!fs.existsSync(folder)) {
+      fs.mkdirSync(folder, { recursive: true });
+    }
+    const files = fs.readdirSync(folder);
+    if (files.length > 0 && fs.existsSync(path.join(folder, 'creds.json'))) {
+      return;
+    }
+
+    console.log('🔄 Ephemeral disk reset detected! Restoring WhatsApp session from Supabase Cloud...');
+    const res = await supabase('GET', 'bot_session?id=eq.auth_backup');
+    if (Array.isArray(res) && res.length > 0 && res[0]?.data) {
+      const fileMap = res[0].data;
+      let restoredCount = 0;
+      for (const fileName in fileMap) {
+        fs.writeFileSync(path.join(folder, fileName), fileMap[fileName], 'utf-8');
+        restoredCount++;
+      }
+      console.log(`✅ Successfully restored ${restoredCount} auth files from Supabase!`);
+    }
+  } catch (e) {
+    console.error('Error restoring auth folder from Supabase:', e?.message || e);
+  }
+}
+
+async function backupAuthFolderToSupabase(folder) {
+  try {
+    if (!fs.existsSync(folder)) return;
+    const files = fs.readdirSync(folder);
+    if (files.length === 0) return;
+
+    const fileMap = {};
+    for (const file of files) {
+      const filePath = path.join(folder, file);
+      if (fs.statSync(filePath).isFile()) {
+        fileMap[file] = fs.readFileSync(filePath, 'utf-8');
+      }
+    }
+
+    const res = await supabase('POST', 'bot_session', {
+      id: 'auth_backup',
+      data: fileMap,
+      updated_at: new Date().toISOString()
+    });
+    if (res?.code || res?.error) {
+      await supabase('PATCH', 'bot_session?id=eq.auth_backup', {
+        data: fileMap,
+        updated_at: new Date().toISOString()
+      });
+    }
+  } catch {}
+}
+
 let currentSock = null;
 
 // ─── MAIN BOT ──────────────────────────────────────────────────────────────
@@ -1035,6 +1090,7 @@ async function startBot() {
     currentSock = null;
   }
 
+  await restoreAuthFolderFromSupabase(AUTH_FOLDER);
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
   const { version } = await fetchLatestBaileysVersion();
 
@@ -1053,7 +1109,10 @@ async function startBot() {
   currentSock = sock;
 
   // Save credentials on update
-  sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('creds.update', async () => {
+    await saveCreds();
+    backupAuthFolderToSupabase(AUTH_FOLDER);
+  });
 
   // Connection updates
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
@@ -1079,6 +1138,8 @@ async function startBot() {
       console.log(`✅ Listening to group: "${TARGET_GROUP}"`);
       console.log('✅ Forward any PhonePe screenshot to the group to add expenses.');
       console.log('✅ Send any Audio Voice Note to auto-transcribe and process commands!\n');
+
+      backupAuthFolderToSupabase(AUTH_FOLDER);
 
       // Pre-fetch participating groups to cache target group JID instantly
       try {
