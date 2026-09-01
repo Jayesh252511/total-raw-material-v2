@@ -1025,7 +1025,7 @@ async function startBot() {
     currentSock = null;
   }
 
-  const { state, saveCreds } = await useCombinedAuthState(AUTH_FOLDER);
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
   const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
