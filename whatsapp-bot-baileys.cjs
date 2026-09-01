@@ -955,23 +955,32 @@ async function useCombinedAuthState(folder) {
 const groupSubjectCache = new Map();
 
 async function isTargetGroup(sock, jid) {
+  if (!jid) return false;
+  if (!jid.endsWith('@g.us')) return true; // Allow direct 1-on-1 chat to bot
+
+  function matchesTargetGroup(subj) {
+    if (!subj) return false;
+    const s = subj.trim().toLowerCase();
+    return s.includes('total raw material') || s.includes('total-raw-material') || s === TARGET_GROUP.trim().toLowerCase();
+  }
+
   if (groupSubjectCache.has(jid)) {
-    return groupSubjectCache.get(jid) === TARGET_GROUP;
+    return matchesTargetGroup(groupSubjectCache.get(jid));
   }
   const meta = await sock.groupMetadata(jid).catch(() => null);
   if (meta?.subject) {
     groupSubjectCache.set(jid, meta.subject);
-    return meta.subject === TARGET_GROUP;
+    return matchesTargetGroup(meta.subject);
   }
   try {
     const groups = await sock.groupFetchAllParticipating();
     for (const gId in groups) {
       if (groups[gId]?.subject) {
         groupSubjectCache.set(gId, groups[gId].subject);
+        if (gId === jid) {
+          return matchesTargetGroup(groups[gId].subject);
+        }
       }
-    }
-    if (groupSubjectCache.has(jid)) {
-      return groupSubjectCache.get(jid) === TARGET_GROUP;
     }
   } catch {}
   return false;
@@ -1098,10 +1107,7 @@ async function startBot() {
 
         // Get chat info
         const jid = msg.key.remoteJid;
-        const isGroup = jid.endsWith('@g.us');
-        if (!isGroup) continue;
-
-        // Fast in-memory check if this is the target group (0.0001ms)
+        // Check if message is from target group or direct chat (0.0001ms)
         if (!(await isTargetGroup(sock, jid))) continue;
 
         const msgContent = msg.message;
