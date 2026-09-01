@@ -21,25 +21,28 @@ const SUPABASE_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmF
 const TARGET_GROUP   = 'Bot total raw material';
 const AUTH_FOLDER    = './baileys_auth';
 
+const qrcode = require('qrcode');
+
 let currentPairingCode = null;
+let currentQRCodeImage = null;
 let botStatus = 'Starting...';
 
-// ─── HTTP DASHBOARD (Serves Pairing Code & Keeps Cloud Server Alive) ────────
+// ─── HTTP DASHBOARD (Serves Scannable QR Image & Pairing Code) ──────────────
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(`
     <!DOCTYPE html>
     <html>
       <head>
-        <title>WhatsApp Bot Status</title>
+        <title>WhatsApp Bot Dashboard</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta http-equiv="refresh" content="4">
+        <meta http-equiv="refresh" content="3">
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 1.5rem; background: #0f172a; color: #fff; text-align: center; }
           .card { background: #1e293b; padding: 2rem; border-radius: 1rem; max-width: 520px; margin: 1rem auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
-          .code { font-size: 3rem; letter-spacing: 8px; font-weight: 900; background: #2563eb; color: #ffffff; padding: 1rem 2rem; border-radius: 0.75rem; margin: 1.5rem 0; display: inline-block; box-shadow: 0 4px 20px rgba(37,99,235,0.5); }
+          .code { font-size: 2.8rem; letter-spacing: 6px; font-weight: 900; background: #2563eb; color: #ffffff; padding: 0.75rem 1.5rem; border-radius: 0.75rem; margin: 1rem 0; display: inline-block; box-shadow: 0 4px 20px rgba(37,99,235,0.5); }
           .status { font-size: 1.2rem; margin-bottom: 1rem; color: #38bdf8; font-weight: 600; }
-          .steps { text-align: left; background: #0f172a; padding: 1.25rem; border-radius: 0.75rem; font-size: 0.95rem; margin-top: 1.5rem; line-height: 1.6; border: 1px solid #334155; }
+          .qr-box { background: #ffffff; padding: 1.25rem; border-radius: 1rem; display: inline-block; margin: 1rem 0; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
           .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; background: ${botStatus.includes('LIVE') ? '#10b981' : '#f59e0b'}; color: #fff; font-size: 0.85rem; font-weight: 600; }
         </style>
       </head>
@@ -47,20 +50,24 @@ http.createServer((req, res) => {
         <div class="card">
           <h1>🤖 WhatsApp Bot Dashboard</h1>
           <div class="status">Status: <span class="badge">${botStatus}</span></div>
-          ${currentPairingCode ? `
-            <p style="color:#94a3b8; font-size:1.1rem;">WhatsApp Pairing Code for <strong>+${PHONE_NUMBER}</strong>:</p>
-            <div class="code">${currentPairingCode}</div>
-            <div class="steps">
-              <strong>📲 Enter this code on your phone:</strong><br>
-              1. Open <strong>WhatsApp</strong> on phone <strong>+${PHONE_NUMBER}</strong><br>
-              2. Tap <strong>Settings</strong> (or 3 dots) → <strong>Linked Devices</strong><br>
-              3. Tap <strong>Link a Device</strong><br>
-              4. Tap <strong>Link with phone number instead</strong> (at bottom)<br>
-              5. Enter code: <strong style="color:#38bdf8; font-size:1.1rem;">${currentPairingCode}</strong>
+
+          ${currentQRCodeImage ? `
+            <div class="qr-box">
+              <img src="${currentQRCodeImage}" alt="Scan QR Code" style="width:280px; height:280px; display:block;" />
             </div>
-          ` : `
-            <p style="color:#94a3b8;">${botStatus.includes('LIVE') ? '✅ Bot is connected and running 24/7!' : '⏳ Generating pairing code... Refreshing in 4s.'}</p>
-          `}
+            <p style="color:#38bdf8; font-size:1.1rem; font-weight:bold; margin-top:0.25rem;">📷 Scan this QR Code with WhatsApp Camera!</p>
+          ` : ''}
+
+          ${currentPairingCode ? `
+            <div style="margin-top:1.25rem; border-top:1px solid #334155; padding-top:1rem;">
+              <p style="color:#94a3b8; font-size:1rem;">Or enter 8-Digit Pairing Code on phone:</p>
+              <div class="code">${currentPairingCode}</div>
+            </div>
+          ` : ''}
+
+          ${!currentQRCodeImage && !currentPairingCode ? `
+            <p style="color:#94a3b8;">${botStatus.includes('LIVE') ? '✅ Bot is connected and running 24/7!' : '⏳ Generating QR Code... Refreshing in 3s.'}</p>
+          ` : ''}
         </div>
       </body>
     </html>
@@ -778,10 +785,19 @@ async function startBot() {
     }, 3000);
   }
 
-  sock.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
+  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+    if (qr) {
+      try {
+        currentQRCodeImage = await qrcode.toDataURL(qr, { margin: 2, scale: 8 });
+        botStatus = 'Scan QR Code below';
+      } catch (e) {
+        console.error('QR Image error:', e);
+      }
+    }
     if (connection === 'open') {
       botStatus = 'LIVE & READY 24/7';
       currentPairingCode = null;
+      currentQRCodeImage = null;
       console.log('\n✅ WhatsApp Bot is LIVE and ready!');
       console.log(`✅ Listening to group: "${TARGET_GROUP}"`);
       console.log('✅ Forward any PhonePe screenshot to the group to add expenses.\n');
@@ -797,6 +813,7 @@ async function startBot() {
         console.log('❌ Session invalidated (Code 401). Clearing auth folder for fresh pairing...');
         try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch {}
         currentPairingCode = null;
+        currentQRCodeImage = null;
         setTimeout(startBot, 2000);
       }
     }
