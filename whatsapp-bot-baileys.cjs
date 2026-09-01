@@ -5,7 +5,7 @@
  * Run: node whatsapp-bot-baileys.cjs
  */
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, initAuthCreds, BufferJSON, proto } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const https = require('https');
@@ -787,6 +787,98 @@ async function handleText(text, sender = 'default') {
   return `🤖 *Samajh nahi aaya!*\n"_${text.slice(0, 40)}_"\n\nYeh commands try karo:\n• *sell entry add* — Add sell bill\n• *report* — Full data\n• *petrol* — Petrol details\n• *stock* — Maal balance\n• *balance* — Cash balance\n• *delete [name]* — Delete entry\n\n📸 _PhonePe screenshot bhejo for auto-entry_`;
 }
 
+// ─── PERSISTENT SUPABASE AUTH STATE (Prevents Render Unlinking) ───────────────
+async function useCombinedAuthState(folder) {
+  const localAuth = await useMultiFileAuthState(folder);
+
+  try {
+    const res = await supabase('GET', 'bot_session?id=eq.creds');
+    if (Array.isArray(res) && res.length > 0 && res[0]?.data) {
+      const dbCreds = JSON.parse(JSON.stringify(res[0].data), BufferJSON.reviver);
+      if (dbCreds && dbCreds.noiseKey) {
+        Object.assign(localAuth.state.creds, dbCreds);
+        console.log('🔄 Restored WhatsApp auth session from Supabase Database!');
+      }
+    }
+  } catch (e) {
+    console.log('ℹ️ Supabase auth session fallback to local auth');
+  }
+
+  const saveCreds = async () => {
+    await localAuth.saveCreds();
+    try {
+      const payloadData = JSON.parse(JSON.stringify(localAuth.state.creds, BufferJSON.replacer));
+      const res = await supabase('POST', 'bot_session', {
+        id: 'creds',
+        data: payloadData,
+        updated_at: new Date().toISOString()
+      });
+      if (res?.code || res?.error) {
+        await supabase('PATCH', 'bot_session?id=eq.creds', {
+          data: payloadData,
+          updated_at: new Date().toISOString()
+        });
+      }
+    } catch {}
+  };
+
+  const originalGet = localAuth.state.keys.get;
+  const originalSet = localAuth.state.keys.set;
+
+  localAuth.state.keys.get = async (type, ids) => {
+    const data = await originalGet(type, ids);
+    const missingIds = ids.filter(id => !data[id]);
+    if (missingIds.length > 0) {
+      await Promise.all(missingIds.map(async id => {
+        const keyId = `${type}-${id}`;
+        try {
+          const res = await supabase('GET', `bot_session?id=eq.${encodeURIComponent(keyId)}`);
+          if (Array.isArray(res) && res.length > 0 && res[0]?.data) {
+            const val = JSON.parse(JSON.stringify(res[0].data), BufferJSON.reviver);
+            if (type === 'app-state-sync-key' && val && proto) {
+              data[id] = proto.Message.AppStateSyncKeyData.fromObject(val);
+            } else {
+              data[id] = val;
+            }
+          }
+        } catch {}
+      }));
+    }
+    return data;
+  };
+
+  localAuth.state.keys.set = async (data) => {
+    await originalSet(data);
+    const tasks = [];
+    for (const type in data) {
+      for (const id in data[type]) {
+        const value = data[type][id];
+        const keyId = `${type}-${id}`;
+        if (value) {
+          const payloadData = JSON.parse(JSON.stringify(value, BufferJSON.replacer));
+          tasks.push(
+            supabase('POST', 'bot_session', {
+              id: keyId,
+              data: payloadData,
+              updated_at: new Date().toISOString()
+            }).catch(() =>
+              supabase('PATCH', `bot_session?id=eq.${encodeURIComponent(keyId)}`, {
+                data: payloadData,
+                updated_at: new Date().toISOString()
+              })
+            )
+          );
+        } else {
+          tasks.push(supabase('DELETE', `bot_session?id=eq.${encodeURIComponent(keyId)}`));
+        }
+      }
+    }
+    await Promise.all(tasks).catch(() => {});
+  };
+
+  return { state: localAuth.state, saveCreds };
+}
+
 let currentSock = null;
 
 // ─── MAIN BOT ──────────────────────────────────────────────────────────────
@@ -796,7 +888,7 @@ async function startBot() {
     currentSock = null;
   }
 
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
+  const { state, saveCreds } = await useCombinedAuthState(AUTH_FOLDER);
   const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
