@@ -787,6 +787,70 @@ async function handleText(text, sender = 'default') {
   return `🤖 *Samajh nahi aaya!*\n"_${text.slice(0, 40)}_"\n\nYeh commands try karo:\n• *sell entry add* — Add sell bill\n• *report* — Full data\n• *petrol* — Petrol details\n• *stock* — Maal balance\n• *balance* — Cash balance\n• *delete [name]* — Delete entry\n\n📸 _PhonePe screenshot bhejo for auto-entry_`;
 }
 
+// ─── SUPABASE AUTH STATE ADAPTER (Persists WhatsApp Login in DB for Cloud) ──
+async function useSupabaseAuthState() {
+  const { initAuthCreds, BufferJSON, proto } = require('@whiskeysockets/baileys');
+
+  const res = await supabase('GET', 'bot_session?id=eq.creds');
+  let creds;
+  if (Array.isArray(res) && res.length > 0 && res[0].data) {
+    try {
+      creds = JSON.parse(JSON.stringify(res[0].data), BufferJSON.reviver);
+    } catch {
+      creds = initAuthCreds();
+    }
+  } else {
+    creds = initAuthCreds();
+  }
+
+  return {
+    state: {
+      creds,
+      keys: {
+        get: async (type, ids) => {
+          const data = {};
+          await Promise.all(ids.map(async id => {
+            const keyId = `${type}-${id}`;
+            const row = await supabase('GET', `bot_session?id=eq.${encodeURIComponent(keyId)}`);
+            if (Array.isArray(row) && row.length > 0 && row[0].data) {
+              try {
+                let value = JSON.parse(JSON.stringify(row[0].data), BufferJSON.reviver);
+                if (type === 'app-state-sync-key' && value) {
+                  value = proto.Message.AppStateSyncKeyData.fromObject(value);
+                }
+                data[id] = value;
+              } catch {}
+            }
+          }));
+          return data;
+        },
+        set: async (data) => {
+          for (const category in data) {
+            for (const id in data[category]) {
+              const value = data[category][id];
+              const keyId = `${category}-${id}`;
+              if (value) {
+                await supabase('POST', 'bot_session', {
+                  id: keyId,
+                  data: JSON.parse(JSON.stringify(value, BufferJSON.replacer))
+                }).catch(() => {});
+              } else {
+                await supabase('DELETE', `bot_session?id=eq.${encodeURIComponent(keyId)}`).catch(() => {});
+              }
+            }
+          }
+        }
+      }
+    },
+    saveCreds: async () => {
+      await supabase('POST', 'bot_session', {
+        id: 'creds',
+        data: JSON.parse(JSON.stringify(creds, BufferJSON.replacer))
+      }).catch(() => {});
+    }
+  };
+}
+
 let currentSock = null;
 
 // ─── MAIN BOT ──────────────────────────────────────────────────────────────
@@ -796,7 +860,7 @@ async function startBot() {
     currentSock = null;
   }
 
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
+  const { state, saveCreds } = await useSupabaseAuthState();
   const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
