@@ -881,6 +881,9 @@ async function startBot() {
       console.log('\n✅ WhatsApp Bot is LIVE and ready!');
       console.log(`✅ Listening to group: "${TARGET_GROUP}"`);
       console.log('✅ Forward any PhonePe screenshot to the group to add expenses.\n');
+      
+      // Save active session state to Supabase DB immediately on connect
+      await saveSessionToSupabase();
     }
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
@@ -993,6 +996,26 @@ async function startBot() {
     }
   });
 }
+
+// ─── SELF-PING KEEP-ALIVE (Prevents Render Free Service from Sleeping) ────
+const https = require('https');
+const http = require('http');
+
+function startSelfKeepAlive() {
+  const renderUrl = process.env.RENDER_EXTERNAL_URL || 'https://total-raw-material-v2.onrender.com';
+  console.log(`📡 Initializing 24/7 Keep-Alive self-ping for ${renderUrl}...`);
+
+  setInterval(() => {
+    try {
+      const client = renderUrl.startsWith('https') ? https : http;
+      client.get(renderUrl, () => {
+        // Keeps Render active 24/7
+      }).on('error', () => {});
+    } catch {}
+  }, 3 * 60 * 1000); // Ping every 3 minutes (Render sleeps after 15 min)
+}
+
+startSelfKeepAlive();
 
 console.log('🚀 Starting WhatsApp Bot for Total Raw Material...');
 console.log('   No Chrome needed — connecting via WebSocket!\n');
