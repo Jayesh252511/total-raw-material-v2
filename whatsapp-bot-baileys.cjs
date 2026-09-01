@@ -1157,36 +1157,6 @@ async function startBot() {
 
         console.log(`📨 Message in "${TARGET_GROUP}" | fromMe: ${msg.key.fromMe} | Type: ${Object.keys(msgContent).join(', ')}`);
 
-        // ── AUDIO VOICE NOTE ("Bolee Bot") ──────────────────────────────────
-        const audioMsg = msgContent.audioMessage || msgContent.pttMessage;
-        if (audioMsg) {
-          console.log('🎙️ Audio Voice Note detected! Processing with Gemini...');
-          await sock.sendMessage(jid, { text: '🎙️ *Aapka voice note sun raha hoon...*' });
-
-          const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-          const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
-          const base64 = buffer.toString('base64');
-          const mime = audioMsg.mimetype || 'audio/ogg; codecs=opus';
-
-          let audioResult;
-          try {
-            audioResult = await processVoiceAudio(base64, mime);
-          } catch (e) {
-            console.error('Voice audio error:', e.message);
-            await sock.sendMessage(jid, { text: '❌ Voice note samajh nahi aaya. Kripya dobara clear bolein.' });
-            continue;
-          }
-
-          console.log(`🎙️ Voice Transcript: "${audioResult.transcript}" | Command: "${audioResult.command}"`);
-
-          const sender = msg.key.participant || msg.key.remoteJid;
-          const replyText = await handleText(audioResult.command, sender);
-
-          const voiceHeader = `🎙️ *Voice Note Received:* "${audioResult.transcript}"\n━━━━━━━━━━━━━━━━━━━━\n`;
-          await sock.sendMessage(jid, { text: voiceHeader + replyText });
-          continue;
-        }
-
         // ── IMAGE: PhonePe Screenshot ─────────────────────────────────────
         const imgMsg = msgContent.imageMessage || msgContent.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
         const actualImg = msgContent.imageMessage;
@@ -1265,6 +1235,7 @@ async function startBot() {
         } else {
           const text = msgContent.conversation || msgContent.extendedTextMessage?.text || '';
           if (!text) continue;
+          const sender = msg.key.participant || msg.key.remoteJid || 'default';
           console.log(`💬 Processing command: "${text}" from ${sender}`);
           try {
             const reply = await handleText(text, sender);
