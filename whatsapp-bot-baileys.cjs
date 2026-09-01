@@ -292,8 +292,61 @@ async function generateReport() {
 ━━━━━━━━━━━━━━━━━━━━
 _"petrol report" — Petrol details_
 _"operator report" — Majuri details_
+_"august report" — Monthly report_
 _"stock" — Stock only_
 _"balance" — Cash balance only_`;
+}
+
+async function generateMonthlyReport(monthCode, monthLabel) {
+  const [expenses, sells, pcEntries] = await Promise.all([
+    supabase('GET', 'expenses?select=amount,category,entry_date,name'),
+    supabase('GET', 'sells?select=quantity,payment,entry_date,name,rate'),
+    fetchExt('entries?select=qty,rate,entry_date')
+  ]);
+
+  const expArr = (Array.isArray(expenses) ? expenses : []).filter(e => e.entry_date?.startsWith(monthCode));
+  const sellArr = (Array.isArray(sells) ? sells : []).filter(e => e.entry_date?.startsWith(monthCode));
+  const pcArr = (Array.isArray(pcEntries) ? pcEntries : []).filter(r => r.entry_date?.startsWith(monthCode));
+
+  const monthMaint = expArr.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const petrolTotal = expArr.filter(e => e.category === 'petrol_diesel').reduce((s, e) => s + Number(e.amount || 0), 0);
+  const operatorTotal = expArr.filter(e => e.category === 'operator').reduce((s, e) => s + Number(e.amount || 0), 0);
+  const otherExpense = expArr.filter(e => e.category !== 'petrol_diesel' && e.category !== 'operator').reduce((s, e) => s + Number(e.amount || 0), 0);
+
+  const monthSellQty = sellArr.reduce((s, e) => s + Number(e.quantity || 0), 0);
+  const monthSellPay = sellArr.reduce((s, e) => s + Number(e.payment || 0), 0);
+  const sellCount = sellArr.length;
+
+  const monthRMQty = pcArr.reduce((s, r) => s + Number(r.qty || 0), 0);
+  const monthRMCost = pcArr.reduce((s, r) => s + (Number(r.qty || 0) * Number(r.rate || 0)), 0);
+
+  const totalMonthExpense = monthMaint + monthRMCost;
+  const netMonthlyIncome = monthSellPay - totalMonthExpense;
+
+  return `📊 *MONTHLY REPORT — ${monthLabel.toUpperCase()}*
+🗓️ Month: ${monthCode}
+━━━━━━━━━━━━━━━━━━━━
+🛒 *BIKRI (Sales)*
+• Total Qty Sold: *${monthSellQty.toFixed(3)} tons*
+• Total Payment Received: *${fmtINR(monthSellPay)}*
+• Total Sell Bills: *${sellCount} entries*
+
+🔧 *KHARCHA (Maintenance)*
+• Total Maintenance: *${fmtINR(monthMaint)}*
+• Petrol / Diesel: *${fmtINR(petrolTotal)}*
+• Operator Majuri: *${fmtINR(operatorTotal)}*
+• Other Expenses: *${fmtINR(otherExpense)}*
+
+📦 *RAW MATERIAL (Purchase)*
+• Total Purchased: *${monthRMQty.toFixed(3)} tons*
+• Total RM Cost: *${fmtINR(monthRMCost)}*
+
+━━━━━━━━━━━━━━━━━━━━
+💰 *MONTHLY SUMMARY:*
+• Total Revenue (Sell In): *${fmtINR(monthSellPay)}*
+• Total Expenses (All Out): *${fmtINR(totalMonthExpense)}*
+• Net Monthly Cashflow: *${fmtINR(netMonthlyIncome)}*
+━━━━━━━━━━━━━━━━━━━━`;
 }
 
 // ─── WIZARD & DATE HELPERS ──────────────────────────────────────────────────
@@ -460,6 +513,50 @@ async function handleText(text, sender = 'default') {
 
   // ── OPERATOR / MAJURI ────────────────────────────────────────────────────
   if (/operator|majuri/.test(t) && !/sells|sell|bikri/.test(t)) return generateOperatorReport();
+
+  // ── MONTHLY SPECIFIC REPORT ──────────────────────────────────────────────
+  // e.g. "august report", "august month ki report", "is mahine ki report", "july report"
+  const monthMap = {
+    january: '01', jan: '01',
+    february: '02', feb: '02',
+    march: '03', mar: '03',
+    april: '04', apr: '04',
+    may: '05',
+    june: '06', jun: '06',
+    july: '07', jul: '07',
+    august: '08', aug: '08',
+    september: '09', sep: '09', sept: '09',
+    october: '10', oct: '10',
+    november: '11', nov: '11',
+    december: '12', dec: '12'
+  };
+
+  const monthMatch = t.match(/(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|is mahine|pichle mahine|this month|last month)/i);
+  if (monthMatch && (/report|summary|batao|dikhao|status|sari|mahine|month|ki/i.test(t) || monthMatch[0])) {
+    const key = monthMatch[1].toLowerCase();
+    let year = new Date().getFullYear();
+    let monthNum;
+
+    if (key === 'is mahine' || key === 'this month') {
+      monthNum = String(new Date().getMonth() + 1).padStart(2, '0');
+    } else if (key === 'pichle mahine' || key === 'last month') {
+      let d = new Date();
+      d.setMonth(d.getMonth() - 1);
+      monthNum = String(d.getMonth() + 1).padStart(2, '0');
+      year = d.getFullYear();
+    } else {
+      monthNum = monthMap[key];
+      const yearMatch = t.match(/\b(202\d)\b/);
+      if (yearMatch) year = parseInt(yearMatch[1]);
+    }
+
+    if (monthNum) {
+      const monthCode = `${year}-${monthNum}`;
+      const monthNamesFull = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const monthLabel = `${monthNamesFull[parseInt(monthNum) - 1]} ${year}`;
+      return generateMonthlyReport(monthCode, monthLabel);
+    }
+  }
 
   // ── FULL REPORT / DASHBOARD ──────────────────────────────────────────────
   if (/report|dashboard|dikhao|batao|bata|sari|summary|status|poora|pura|full/.test(t)) return generateReport();
