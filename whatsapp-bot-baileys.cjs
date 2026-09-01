@@ -99,50 +99,80 @@ const EXT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 
 // ─── SUPABASE ──────────────────────────────────────────────────────────────
 function supabase(method, urlPath, body) {
-  return new Promise((resolve, reject) => {
-    const payload = body ? JSON.stringify(body) : null;
-    const opts = {
-      hostname: SUPABASE_URL,
-      path: `/rest/v1/${urlPath}`,
-      method,
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        ...(method === 'POST' || method === 'PATCH' ? { 'Prefer': 'return=representation' } : {}),
-        ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
-      }
-    };
-    const req = https.request(opts, (res) => {
-      let data = '';
-      res.on('data', c => data += c);
-      res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(data); } });
-    });
-    req.on('error', reject);
-    if (payload) req.write(payload);
-    req.end();
+  return new Promise((resolve) => {
+    try {
+      const payload = body ? JSON.stringify(body) : null;
+      const opts = {
+        hostname: SUPABASE_URL,
+        path: `/rest/v1/${urlPath}`,
+        method,
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          ...(method === 'POST' || method === 'PATCH' ? { 'Prefer': 'return=representation' } : {}),
+          ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
+        },
+        timeout: 10000
+      };
+      const req = https.request(opts, (res) => {
+        let data = '';
+        res.on('data', c => data += c);
+        res.on('end', () => {
+          try { resolve(JSON.parse(data)); } catch { resolve([]); }
+        });
+      });
+      req.on('error', (err) => {
+        console.error('Supabase request error:', err?.message || err);
+        resolve([]);
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        console.error('Supabase request timeout:', urlPath);
+        resolve([]);
+      });
+      if (payload) req.write(payload);
+      req.end();
+    } catch {
+      resolve([]);
+    }
   });
 }
 
 function fetchExt(urlPath) {
-  return new Promise((resolve, reject) => {
-    const opts = {
-      hostname: EXT_URL,
-      path: `/rest/v1/${urlPath}`,
-      method: 'GET',
-      headers: {
-        'apikey': EXT_KEY,
-        'Authorization': `Bearer ${EXT_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    };
-    const req = https.request(opts, (res) => {
-      let data = '';
-      res.on('data', c => data += c);
-      res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(data); } });
-    });
-    req.on('error', reject);
-    req.end();
+  return new Promise((resolve) => {
+    try {
+      const opts = {
+        hostname: EXT_URL,
+        path: `/rest/v1/${urlPath}`,
+        method: 'GET',
+        headers: {
+          'apikey': EXT_KEY,
+          'Authorization': `Bearer ${EXT_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      };
+      const req = https.request(opts, (res) => {
+        let data = '';
+        res.on('data', c => data += c);
+        res.on('end', () => {
+          try { resolve(JSON.parse(data)); } catch { resolve([]); }
+        });
+      });
+      req.on('error', (err) => {
+        console.error('Ext fetch error:', err?.message || err);
+        resolve([]);
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        console.error('Ext fetch timeout:', urlPath);
+        resolve([]);
+      });
+      req.end();
+    } catch {
+      resolve([]);
+    }
   });
 }
 
@@ -1235,10 +1265,18 @@ async function startBot() {
         } else {
           const text = msgContent.conversation || msgContent.extendedTextMessage?.text || '';
           if (!text) continue;
-          console.log(`💬 Text: "${text}"`);
-          const sender = msg.key.participant || msg.key.remoteJid;
-          const reply = await handleText(text, sender);
-          if (reply) await sock.sendMessage(jid, { text: reply });
+          console.log(`💬 Processing command: "${text}" from ${sender}`);
+          try {
+            const reply = await handleText(text, sender);
+            if (reply) {
+              console.log(`📤 Sending reply (${reply.length} chars) to ${jid}...`);
+              const sendRes = await sock.sendMessage(jid, { text: reply });
+              if (sendRes) console.log('✅ Reply sent successfully to WhatsApp!');
+            }
+          } catch (cmdErr) {
+            console.error('❌ Command execution error:', cmdErr?.message || cmdErr);
+            await sock.sendMessage(jid, { text: `❌ Command process karne mein error aaya: ${cmdErr?.message || 'Unknown error'}` }).catch(() => {});
+          }
         }
 
       } catch (err) {
