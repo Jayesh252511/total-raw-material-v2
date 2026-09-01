@@ -146,29 +146,45 @@ function fetchExt(urlPath) {
   });
 }
 
-// ─── GEMINI ────────────────────────────────────────────────────────────────
+// ─── GEMINI API CALL (With Model Fallback) ─────────────────────────────────
 function callGemini(parts) {
-  return new Promise((resolve, reject) => {
-    const payload = JSON.stringify({ contents: [{ parts }] });
-    const opts = {
-      hostname: 'generativelanguage.googleapis.com',
-      path: `/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
-    };
-    const req = https.request(opts, (res) => {
-      let data = '';
-      res.on('data', c => data += c);
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          resolve(parsed?.candidates?.[0]?.content?.parts?.[0]?.text || '');
-        } catch { resolve(''); }
+  const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+  return new Promise((resolve) => {
+    let attempt = 0;
+
+    function tryNext() {
+      if (attempt >= models.length) {
+        return resolve('');
+      }
+      const model = models[attempt++];
+      const payload = JSON.stringify({ contents: [{ parts }] });
+      const cleanKey = GEMINI_API_KEY.replace(/[^a-zA-Z0-9_\-]/g, '');
+      const opts = {
+        hostname: 'generativelanguage.googleapis.com',
+        path: `/v1beta/models/${model}:generateContent?key=${cleanKey}`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+      };
+      const req = https.request(opts, (res) => {
+        let data = '';
+        res.on('data', c => data += c);
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
+              return resolve(text);
+            }
+          } catch {}
+          tryNext();
+        });
       });
-    });
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
+      req.on('error', () => tryNext());
+      req.write(payload);
+      req.end();
+    }
+
+    tryNext();
   });
 }
 
