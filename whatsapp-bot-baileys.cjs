@@ -909,9 +909,11 @@ async function startBot() {
       if (shouldReconnect) {
         setTimeout(startBot, code === 515 ? 1000 : 3000);
       } else {
-        console.log('❌ Session invalidated (Code 401). Automatically clearing auth folder and requesting fresh pairing code...');
+        console.log('❌ Session invalidated (Code 401). Clearing Supabase DB session & requesting fresh pairing code...');
+        currentPairingCode = null;
         try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch {}
-        setTimeout(startBot, 2000);
+        try { await supabase('DELETE', 'bot_session?id=neq.dummy'); } catch {}
+        setTimeout(startBot, 3000);
       }
     }
   });
