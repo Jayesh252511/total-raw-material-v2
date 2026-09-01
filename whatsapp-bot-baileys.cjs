@@ -747,6 +747,19 @@ async function restoreSessionFromSupabase() {
     const res = await supabase('GET', 'bot_session?id=eq.session_snapshot');
     if (Array.isArray(res) && res.length > 0 && res[0].data) {
       const files = res[0].data;
+
+      // Verify creds.json exists and registered === true
+      if (files['creds.json']) {
+        try {
+          const creds = JSON.parse(files['creds.json']);
+          if (!creds.registered) {
+            console.log('⚠️ Saved DB session snapshot is not registered yet. Clearing...');
+            await supabase('DELETE', 'bot_session?id=eq.session_snapshot');
+            return false;
+          }
+        } catch {}
+      }
+
       if (!fs.existsSync(AUTH_FOLDER)) fs.mkdirSync(AUTH_FOLDER, { recursive: true });
       let count = 0;
       for (const fileName in files) {
@@ -755,7 +768,7 @@ async function restoreSessionFromSupabase() {
         count++;
       }
       if (count > 0) {
-        console.log(`✅ Restored ${count} WhatsApp login session files from Supabase DB!`);
+        console.log(`✅ Restored ${count} registered WhatsApp session files from Supabase DB!`);
         return true;
       }
     }
@@ -768,9 +781,19 @@ async function restoreSessionFromSupabase() {
 async function saveSessionToSupabase() {
   try {
     if (!fs.existsSync(AUTH_FOLDER)) return;
-    const fileNames = fs.readdirSync(AUTH_FOLDER);
-    if (fileNames.length === 0) return;
+    const credsPath = path.join(AUTH_FOLDER, 'creds.json');
+    if (!fs.existsSync(credsPath)) return;
 
+    // ONLY save to DB if registered === true
+    const credsContent = fs.readFileSync(credsPath, 'utf8');
+    try {
+      const credsObj = JSON.parse(credsContent);
+      if (!credsObj.registered) return;
+    } catch {
+      return;
+    }
+
+    const fileNames = fs.readdirSync(AUTH_FOLDER);
     const sessionData = {};
     for (const file of fileNames) {
       const filePath = path.join(AUTH_FOLDER, file);
