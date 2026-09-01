@@ -6,13 +6,11 @@
  */
 
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const https = require('https');
+const http = require('http');
 const fs = require('fs');
 const path = require('path');
-
-const http = require('http');
 
 // ─── CONFIG ────────────────────────────────────────────────────────────────
 const PHONE_NUMBER   = process.env.PHONE_NUMBER || '918605601801';
@@ -26,7 +24,7 @@ const AUTH_FOLDER    = './baileys_auth';
 let currentPairingCode = null;
 let botStatus = 'Starting...';
 
-// ─── HTTP DASHBOARD (Serves Pairing Code & Keeps Render Awake) ──────────────
+// ─── HTTP DASHBOARD (Serves Pairing Code & Keeps Cloud Server Alive) ────────
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(`
@@ -35,33 +33,33 @@ http.createServer((req, res) => {
       <head>
         <title>WhatsApp Bot Status</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta http-equiv="refresh" content="5">
+        <meta http-equiv="refresh" content="4">
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 1.5rem; background: #0f172a; color: #fff; text-align: center; }
-          .card { background: #1e293b; padding: 2rem; border-radius: 1rem; max-width: 500px; margin: 1rem auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
-          .code { font-size: 2.8rem; letter-spacing: 6px; font-weight: 800; background: #2563eb; color: #fff; padding: 0.75rem 1.5rem; border-radius: 0.75rem; margin: 1.5rem 0; display: inline-block; box-shadow: 0 4px 14px rgba(37,99,235,0.4); }
+          .card { background: #1e293b; padding: 2rem; border-radius: 1rem; max-width: 520px; margin: 1rem auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
+          .code { font-size: 3rem; letter-spacing: 8px; font-weight: 900; background: #2563eb; color: #ffffff; padding: 1rem 2rem; border-radius: 0.75rem; margin: 1.5rem 0; display: inline-block; box-shadow: 0 4px 20px rgba(37,99,235,0.5); }
           .status { font-size: 1.2rem; margin-bottom: 1rem; color: #38bdf8; font-weight: 600; }
           .steps { text-align: left; background: #0f172a; padding: 1.25rem; border-radius: 0.75rem; font-size: 0.95rem; margin-top: 1.5rem; line-height: 1.6; border: 1px solid #334155; }
-          .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; background: #10b981; color: #fff; font-size: 0.85rem; font-weight: 600; }
+          .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; background: ${botStatus.includes('LIVE') ? '#10b981' : '#f59e0b'}; color: #fff; font-size: 0.85rem; font-weight: 600; }
         </style>
       </head>
       <body>
         <div class="card">
-          <h1>🤖 WhatsApp Bot Status</h1>
+          <h1>🤖 WhatsApp Bot Dashboard</h1>
           <div class="status">Status: <span class="badge">${botStatus}</span></div>
           ${currentPairingCode ? `
-            <p style="color:#94a3b8; font-size:1.1rem;">Your WhatsApp Pairing Code for <strong>+${PHONE_NUMBER}</strong>:</p>
+            <p style="color:#94a3b8; font-size:1.1rem;">WhatsApp Pairing Code for <strong>+${PHONE_NUMBER}</strong>:</p>
             <div class="code">${currentPairingCode}</div>
             <div class="steps">
-              <strong>📲 How to enter on your phone:</strong><br>
-              1. Open <strong>WhatsApp</strong> on <strong>+${PHONE_NUMBER}</strong><br>
+              <strong>📲 Enter this code on your phone:</strong><br>
+              1. Open <strong>WhatsApp</strong> on phone <strong>+${PHONE_NUMBER}</strong><br>
               2. Tap <strong>Settings</strong> (or 3 dots) → <strong>Linked Devices</strong><br>
               3. Tap <strong>Link a Device</strong><br>
               4. Tap <strong>Link with phone number instead</strong> (at bottom)<br>
-              5. Enter code: <strong>${currentPairingCode}</strong>
+              5. Enter code: <strong style="color:#38bdf8; font-size:1.1rem;">${currentPairingCode}</strong>
             </div>
           ` : `
-            <p style="color:#94a3b8;">${botStatus === 'LIVE & READY' ? '✅ Bot is connected and active!' : '⏳ Generating pairing code... Page auto-refreshes every 5 seconds.'}</p>
+            <p style="color:#94a3b8;">${botStatus.includes('LIVE') ? '✅ Bot is connected and running 24/7!' : '⏳ Generating pairing code... Refreshing in 4s.'}</p>
           `}
         </div>
       </body>
@@ -156,61 +154,35 @@ function callGemini(parts) {
   });
 }
 
-// ─── CATEGORY ──────────────────────────────────────────────────────────────
-function detectCategory(message, paidTo) {
-  const text = `${message} ${paidTo}`.toLowerCase();
-  if (/petrol|diesel|disel|fuel|pump/.test(text)) return 'petrol_diesel';
-  if (/bazar|bazaar|salary|majuri|majri|advance|operator|oprator|sameer|sammer|babu|shan|driver|labour|mazdoor/.test(text)) return 'operator';
-  return 'other';
-}
-
-// ─── PROCESS PHONEPAY IMAGE ────────────────────────────────────────────────
-async function processPhonePeImage(imageBase64, mimeType) {
-  const prompt = `This is a PhonePe payment screenshot from India.
-Read all text carefully. Return ONLY valid JSON:
+async function processPhonePeImage(base64Image, mimeType) {
+  const prompt = `Analyze this PhonePe payment screenshot and extract JSON only:
 {
-  "date": "DD Month YYYY",
-  "amount": <number only>,
-  "paid_to_name": "<name>",
-  "message": "<Message field text>",
-  "transaction_id": "<PhonePe Transaction ID starting with T>"
+  "paid_to_name": "Recipient name",
+  "amount": 1234.00,
+  "transaction_id": "Txn ID string",
+  "date": "Date string",
+  "message": "Payment note/purpose"
 }
-Use null for missing fields.`;
+Rules: Return ONLY valid JSON, no markdown. If not PhonePe, set amount null.`;
 
   const text = await callGemini([
-    { inline_data: { mime_type: mimeType, data: imageBase64 } },
-    { text: prompt }
+    { text: prompt },
+    { inlineData: { mimeType, data: base64Image } }
   ]);
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('No JSON in Gemini response');
-  return JSON.parse(match[0]);
+
+  try {
+    const clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    return JSON.parse(clean);
+  } catch {
+    return { amount: null };
+  }
 }
 
-function parseDate(dateStr) {
-  if (!dateStr) return today();
-  try {
-    // Parse date string manually to avoid timezone rollback issues
-    // Gemini returns formats like "30 August 2026" or "30 Aug 2026"
-    const months = { january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12,
-      jan:1,feb:2,mar:3,apr:4,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
-    const parts = dateStr.toLowerCase().replace(/,/g, '').split(/\s+/);
-    if (parts.length >= 3) {
-      let day, month, year;
-      // "30 August 2026" or "August 30 2026"
-      if (isNaN(parts[0])) { month = months[parts[0]]; day = parseInt(parts[1]); year = parseInt(parts[2]); }
-      else { day = parseInt(parts[0]); month = months[parts[1]]; year = parseInt(parts[2]); }
-      if (day && month && year) {
-        return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-      }
-    }
-    // Fallback: try native parse but adjust for IST (+5:30)
-    const d = new Date(dateStr);
-    if (!isNaN(d.getTime())) {
-      const ist = new Date(d.getTime() + (5.5 * 60 * 60 * 1000));
-      return ist.toISOString().split('T')[0];
-    }
-  } catch {}
-  return today();
+function detectCategory(note, paidTo) {
+  const text = `${note} ${paidTo}`.toLowerCase();
+  if (/petrol|diesel|fuel|pump|hpcl|bpcl|ioc|shell|petroleum/.test(text)) return 'petrol_diesel';
+  if (/operator|salary|wages|majuri|worker|driver|staff|advance|remuneration/.test(text)) return 'operator';
+  return 'maintenance';
 }
 
 // ─── REPORTS ───────────────────────────────────────────────────────────────
@@ -228,32 +200,26 @@ async function generateReport() {
   const sellArr = Array.isArray(sells) ? sells : [];
   const pcArr = Array.isArray(pcEntries) ? pcEntries : [];
 
-  // Maintenance
-  const totalMaint = expArr.reduce((s, e) => s + Number(e.amount || 0), 0);
   const yearMaint = expArr.filter(e => e.entry_date?.startsWith(currentYear)).reduce((s, e) => s + Number(e.amount || 0), 0);
   const todayMaint = expArr.filter(e => e.entry_date === todayDate).reduce((s, e) => s + Number(e.amount || 0), 0);
   const monthMaint = expArr.filter(e => e.entry_date?.startsWith(month)).reduce((s, e) => s + Number(e.amount || 0), 0);
   const petrolTotal = expArr.filter(e => e.category === 'petrol_diesel').reduce((s, e) => s + Number(e.amount || 0), 0);
   const operatorTotal = expArr.filter(e => e.category === 'operator').reduce((s, e) => s + Number(e.amount || 0), 0);
 
-  // PC Entries (Raw Material purchases)
   const yearRM = pcArr.filter(r => r.entry_date?.startsWith(currentYear)).reduce((s, r) => s + (Number(r.qty || 0) * Number(r.rate || 0)), 0);
   const yearExpense = yearMaint + yearRM;
 
-  // Stock
   const pcStock = pcArr.reduce((s, r) => s + Number(r.qty || 0), 0);
   const soldStock = sellArr.reduce((s, e) => s + Number(e.quantity || 0), 0);
   const stockAdj = Number(settings?.[0]?.stock_adjustment || 0);
   const totalStock = pcStock - soldStock + stockAdj;
 
-  // Sales
   const totalQty = soldStock;
   const totalPay = sellArr.reduce((s, e) => s + Number(e.payment || 0), 0);
   const monthQty = sellArr.filter(e => e.entry_date?.startsWith(month)).reduce((s, e) => s + Number(e.quantity || 0), 0);
   const todayQty = sellArr.filter(e => e.entry_date === todayDate).reduce((s, e) => s + Number(e.quantity || 0), 0);
   const yearTons = sellArr.filter(e => e.entry_date?.startsWith(currentYear)).reduce((s, e) => s + Number(e.quantity || 0), 0);
 
-  // Money
   const lockMoney = Number(settings?.[0]?.lock_money || 0);
   const totalMoney = lockMoney - yearExpense;
   const dateLabel = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -435,7 +401,6 @@ async function handleText(text, sender = 'default') {
       const p = parseFloat(input.replace(/,/g, '')) || 0;
       session.data.payment = p;
 
-      // Complete wizard & insert row into sells table
       const d = session.data;
       wizardSessions.delete(sender);
 
@@ -454,7 +419,7 @@ async function handleText(text, sender = 'default') {
 
       const savedRow = Array.isArray(inserted) ? inserted[0] : inserted;
       if (!savedRow?.id) {
-        return `❌ *Sell Entry Save Nahi Hua!*\nReason: ${savedRow?.message || 'Supabase RLS permission issue'}`;
+        return `❌ *Sell Entry Save Nahi Hua!*\nReason: ${savedRow?.message || 'Database error'}`;
       }
 
       lastInserted = { ...savedRow, _type: 'sell' };
@@ -515,20 +480,11 @@ async function handleText(text, sender = 'default') {
   if (/operator|majuri/.test(t) && !/sells|sell|bikri/.test(t)) return generateOperatorReport();
 
   // ── MONTHLY SPECIFIC REPORT ──────────────────────────────────────────────
-  // e.g. "august report", "august month ki report", "is mahine ki report", "july report"
   const monthMap = {
-    january: '01', jan: '01',
-    february: '02', feb: '02',
-    march: '03', mar: '03',
-    april: '04', apr: '04',
-    may: '05',
-    june: '06', jun: '06',
-    july: '07', jul: '07',
-    august: '08', aug: '08',
-    september: '09', sep: '09', sept: '09',
-    october: '10', oct: '10',
-    november: '11', nov: '11',
-    december: '12', dec: '12'
+    january: '01', jan: '01', february: '02', feb: '02', march: '03', mar: '03',
+    april: '04', apr: '04', may: '05', june: '06', jun: '06', july: '07', jul: '07',
+    august: '08', aug: '08', september: '09', sep: '09', sept: '09', october: '10', oct: '10',
+    november: '11', nov: '11', december: '12', dec: '12'
   };
 
   const monthMatch = t.match(/(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|is mahine|pichle mahine|this month|last month)/i);
@@ -575,8 +531,7 @@ async function handleText(text, sender = 'default') {
     return `📦 *STOCK BALANCE*\nHaath mein maal: *${totalStock.toFixed(3)} tons*\nKul Kharida: ${pcStock.toFixed(3)} t\nKul Becha: ${soldStock.toFixed(3)} t`;
   }
 
-  // ── ADD FUNDS / LOCK AMOUNT UPDATE (Exact website Add Funds modal) ───────
-  // Examples: "add funds 5000", "add money 5000", "lock ammount add 1 rs", "add lock 5000"
+  // ── ADD FUNDS / LOCK AMOUNT UPDATE ───────────────────────────────────────
   if (/(fund|funds|lock|money|paisa|ammount|amount)/.test(t) && /(add|jodo|karo|plus|\+|dalo|increase|subtract|minus|kam|hatao|nikal|deduct)/.test(t) && !/sell|bikri|expense/.test(t)) {
     const nums = text.match(/[\d,]+\.?\d*/g)?.map(n => parseFloat(n.replace(/,/g, ''))) || [];
     if (nums.length === 0) {
@@ -600,20 +555,17 @@ async function handleText(text, sender = 'default') {
     const newTotal = currentTotal + delta;
     const newLock = currentLock + delta;
 
-    // Update settings: both total_money and lock_money (exact website Add Funds logic)
     const patchRes = await supabase('PATCH', 'settings?id=eq.1', {
       total_money: newTotal,
       lock_money: newLock
     });
 
     if (!Array.isArray(patchRes) || patchRes.length === 0 || patchRes.code || patchRes.error) {
-      return `❌ *Database Permission Error!*\nSupabase RLS policy is blocking updates to settings.\n\nPlease run the SQL query in Supabase SQL Editor once to grant permissions.`;
+      return `❌ *Database Permission Error!*\nSupabase RLS policy is blocking updates to settings.`;
     }
 
-    // Extract optional note from message
     const note = text.replace(/add|funds?|lock|ammount|amount|money|paisa|rs|rupees|₹|jodo|karo|plus|\+|dalo|increase|subtract|minus|kam|hatao|nikal|deduct|[\d,.]+/gi, '').trim();
 
-    // Log to audit_logs table (for website history tab)
     try {
       await supabase('POST', 'audit_logs', {
         action: 'settings_changed',
@@ -634,7 +586,6 @@ async function handleText(text, sender = 'default') {
       });
     } catch {}
 
-    // Calculate Net Available Money (lock_money - yearExpense)
     const yearMaint = (Array.isArray(expenses) ? expenses : []).filter(e => e.entry_date?.startsWith(currentYear)).reduce((s, e) => s + Number(e.amount || 0), 0);
     const yearRM = (Array.isArray(pcEntries) ? pcEntries : []).filter(r => r.entry_date?.startsWith(currentYear)).reduce((s, r) => s + (Number(r.qty || 0) * Number(r.rate || 0)), 0);
     const yearExpense = yearMaint + yearRM;
@@ -662,7 +613,6 @@ async function handleText(text, sender = 'default') {
   if (/sell|bikri/.test(t) && /add|jodo|karo|entry|dalo|naya|bill/.test(t)) {
     const nums = text.match(/[\d,]+\.?\d*/g)?.map(n => parseFloat(n.replace(/,/g, ''))) || [];
 
-    // If single line contains 3+ numbers (e.g. sell add Mahesh 2 200 200 gadi 500) -> fast add!
     if (nums.length >= 3) {
       const nameMatch = text.match(/(?:sell|bikri)\s+(?:add|entry|karo|jodo|dalo|naya|bill)\s+(.+?)(?:\s+[\d,]+)/i);
       const name = nameMatch?.[1]?.trim() || 'Unknown';
@@ -697,7 +647,6 @@ async function handleText(text, sender = 'default') {
       return `✅ *Sell Entry Add Ho Gayi!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${dateFmt}*\n👤 Name: *${name}*\n⚖️ Qty: *${qty} tons*\n💵 Rate: *₹${rate}/t*\n💰 Total: *${fmtINR(totalAmt)}*\n🚛 Gadi Bhada: *${fmtINR(gadiBhada)}*\n💳 Payment: *${fmtINR(payment)}*\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete ${name}" likho_`;
     }
 
-    // Otherwise, START STEP-BY-STEP INTERACTIVE WIZARD!
     wizardSessions.set(sender, { step: 'DATE', data: {} });
     return `📝 *SELL BILL ENTRY WIZARD*\n━━━━━━━━━━━━━━━━━━━━\n📅 *Step 1/6: Date*\n\nTaareekh (DD-MM-YYYY) bataiye (e.g. *24-08-2026* ya *"today"*):`;
   }
@@ -744,7 +693,6 @@ async function handleText(text, sender = 'default') {
       return `🗑️ *Deleted Last Entry!*\n${isSell ? `👤 ${e.name} — ${e.quantity} t` : e.name} — ${fmtINR(isSell ? e.payment : e.amount)}\nDate: ${e.entry_date}`;
     }
 
-    // Search query in sells table first by name or date
     let sellsMatch = await supabase('GET', `sells?name=ilike.*${encodeURIComponent(query)}*&order=entry_date.desc&limit=1`);
     if ((!Array.isArray(sellsMatch) || sellsMatch.length === 0) && /\d/.test(query)) {
       const parsedDate = parseDateInput(query);
@@ -758,7 +706,6 @@ async function handleText(text, sender = 'default') {
       return `🗑️ *Deleted Sell Entry!*\n━━━━━━━━━━━━━━━━━━━━\n👤 Name: *${row.name}*\n📅 Date: *${dateFmt}*\n⚖️ Qty: *${row.quantity} tons*\n💳 Payment: *${fmtINR(row.payment)}*`;
     }
 
-    // Search query in expenses table by name or date
     let expMatch = await supabase('GET', `expenses?name=ilike.*${encodeURIComponent(query)}*&order=entry_date.desc&limit=1`);
     if ((!Array.isArray(expMatch) || expMatch.length === 0) && /\d/.test(query)) {
       const parsedDate = parseDateInput(query);
@@ -783,72 +730,8 @@ async function handleText(text, sender = 'default') {
   // ── TOTAL / KITNA / QTY ───────────────────────────────────────────────────
   if (/total|kitna|qty|quantity|amount|kitne|paise|rupee/.test(t)) return generateReport();
 
-  // ── FALLBACK — never ignore any message ───────────────────────────────────
+  // ── FALLBACK ─────────────────────────────────────────────────────────────
   return `🤖 *Samajh nahi aaya!*\n"_${text.slice(0, 40)}_"\n\nYeh commands try karo:\n• *sell entry add* — Add sell bill\n• *report* — Full data\n• *petrol* — Petrol details\n• *stock* — Maal balance\n• *balance* — Cash balance\n• *delete [name]* — Delete entry\n\n📸 _PhonePe screenshot bhejo for auto-entry_`;
-}
-
-// ─── SUPABASE AUTH STATE ADAPTER (Persists WhatsApp Login in DB for Cloud) ──
-async function useSupabaseAuthState() {
-  const { initAuthCreds, BufferJSON, proto } = require('@whiskeysockets/baileys');
-
-  const res = await supabase('GET', 'bot_session?id=eq.creds');
-  let creds;
-  if (Array.isArray(res) && res.length > 0 && res[0].data) {
-    try {
-      creds = JSON.parse(JSON.stringify(res[0].data), BufferJSON.reviver);
-    } catch {
-      creds = initAuthCreds();
-    }
-  } else {
-    creds = initAuthCreds();
-  }
-
-  return {
-    state: {
-      creds,
-      keys: {
-        get: async (type, ids) => {
-          const data = {};
-          await Promise.all(ids.map(async id => {
-            const keyId = `${type}-${id}`;
-            const row = await supabase('GET', `bot_session?id=eq.${encodeURIComponent(keyId)}`);
-            if (Array.isArray(row) && row.length > 0 && row[0].data) {
-              try {
-                let value = JSON.parse(JSON.stringify(row[0].data), BufferJSON.reviver);
-                if (type === 'app-state-sync-key' && value) {
-                  value = proto.Message.AppStateSyncKeyData.fromObject(value);
-                }
-                data[id] = value;
-              } catch {}
-            }
-          }));
-          return data;
-        },
-        set: async (data) => {
-          for (const category in data) {
-            for (const id in data[category]) {
-              const value = data[category][id];
-              const keyId = `${category}-${id}`;
-              if (value) {
-                await supabase('POST', 'bot_session', {
-                  id: keyId,
-                  data: JSON.parse(JSON.stringify(value, BufferJSON.replacer))
-                }).catch(() => {});
-              } else {
-                await supabase('DELETE', `bot_session?id=eq.${encodeURIComponent(keyId)}`).catch(() => {});
-              }
-            }
-          }
-        }
-      }
-    },
-    saveCreds: async () => {
-      await supabase('POST', 'bot_session', {
-        id: 'creds',
-        data: JSON.parse(JSON.stringify(creds, BufferJSON.replacer))
-      }).catch(() => {});
-    }
-  };
 }
 
 let currentSock = null;
@@ -860,26 +743,25 @@ async function startBot() {
     currentSock = null;
   }
 
-  const { state, saveCreds } = await useSupabaseAuthState();
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
   const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
     version,
     auth: state,
-    logger: pino({ level: 'silent' }), // silent = no debug spam
+    logger: pino({ level: 'silent' }),
     printQRInTerminal: false,
-    browser: ['Ubuntu', 'Chrome', '20.0.04'],
+    browser: ['Mac OS', 'Chrome', '120.0.6099.225'],
     markOnlineOnConnect: false,
     syncFullHistory: false
   });
   currentSock = sock;
 
-  // Save credentials on update
   sock.ev.on('creds.update', saveCreds);
 
-  // Connection updates
-  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
-    if (qr && !sock.authState.creds.registered && !currentPairingCode) {
+  // Request Pairing Code if not registered
+  if (!sock.authState.creds.registered) {
+    setTimeout(async () => {
       try {
         const cleanNumber = PHONE_NUMBER.replace(/[^0-9]/g, '');
         const code = await sock.requestPairingCode(cleanNumber);
@@ -893,9 +775,12 @@ async function startBot() {
       } catch (e) {
         console.error('Failed to request pairing code:', e?.message || e);
       }
-    }
+    }, 3000);
+  }
+
+  sock.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
     if (connection === 'open') {
-      botStatus = 'LIVE & READY';
+      botStatus = 'LIVE & READY 24/7';
       currentPairingCode = null;
       console.log('\n✅ WhatsApp Bot is LIVE and ready!');
       console.log(`✅ Listening to group: "${TARGET_GROUP}"`);
@@ -909,11 +794,10 @@ async function startBot() {
       if (shouldReconnect) {
         setTimeout(startBot, code === 515 ? 1000 : 3000);
       } else {
-        console.log('❌ Session invalidated (Code 401). Clearing Supabase DB session & requesting fresh pairing code...');
-        currentPairingCode = null;
+        console.log('❌ Session invalidated (Code 401). Clearing auth folder for fresh pairing...');
         try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch {}
-        try { await supabase('DELETE', 'bot_session?id=neq.dummy'); } catch {}
-        setTimeout(startBot, 3000);
+        currentPairingCode = null;
+        setTimeout(startBot, 2000);
       }
     }
   });
@@ -924,42 +808,34 @@ async function startBot() {
       try {
         if (!msg.key.remoteJid) continue;
 
-        // Get chat info
         const jid = msg.key.remoteJid;
         const isGroup = jid.endsWith('@g.us');
         if (!isGroup) continue;
 
-        // Get group name
         const groupMeta = await sock.groupMetadata(jid).catch(() => null);
         if (!groupMeta || groupMeta.subject !== TARGET_GROUP) continue;
 
         const msgContent = msg.message;
         if (!msgContent) continue;
 
-        // Skip messages that are bot's own replies (to prevent loops)
         const textContent = msgContent.conversation || msgContent.extendedTextMessage?.text || '';
         const BOT_REPLY_PREFIXES = [
-          '⏳', '✅', '❌', '⚠️', // status messages
-          '📊', '💰', '⛽', '👷', '🗑️', '🤖', '💵', // report & money messages
-          '📦 *STOCK', '🔒 *Lock', '🛒 *SELL', '📋 *DATA', '📄 *PDF', '📝', '👤', '⚖️', '💳', '🚛', // wizard & command replies
-          '📅', // date lines in reports
+          '⏳', '✅', '❌', '⚠️', '📊', '💰', '⛽', '👷', '🗑️', '🤖', '💵',
+          '📦 *STOCK', '🔒 *Lock', '🛒 *SELL', '📋 *DATA', '📄 *PDF', '📝', '👤', '⚖️', '💳', '🚛',
+          '📅'
         ];
         if (textContent && BOT_REPLY_PREFIXES.some(p => textContent.startsWith(p))) {
-          continue; // skip own bot replies
+          continue;
         }
 
+        console.log(`📨 Message in "${TARGET_GROUP}" | fromMe: ${msg.key.fromMe}`);
 
-        console.log(`📨 Message in "${TARGET_GROUP}" | fromMe: ${msg.key.fromMe} | Type: ${Object.keys(msgContent).join(', ')}`);
-
-        // ── IMAGE: PhonePe Screenshot ─────────────────────────────────────
-        const imgMsg = msgContent.imageMessage || msgContent.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
+        // Image PhonePe
         const actualImg = msgContent.imageMessage;
-
         if (actualImg) {
           console.log('🖼️ Image detected! Processing...');
           await sock.sendMessage(jid, { text: '⏳ Screenshot padh raha hoon...' });
 
-          // Download image
           const { downloadMediaMessage } = require('@whiskeysockets/baileys');
           const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
           const base64 = buffer.toString('base64');
@@ -969,24 +845,20 @@ async function startBot() {
           try {
             data = await processPhonePeImage(base64, mime);
           } catch (e) {
-            console.error('Gemini error:', e.message);
-            await sock.sendMessage(jid, { text: '❌ Screenshot read nahi hua. Clear image bhejiye.' });
+            await sock.sendMessage(jid, { text: '❌ Screenshot read nahi hua.' });
             continue;
           }
-
-          console.log('📋 Gemini extracted:', JSON.stringify(data));
 
           if (!data.amount) {
-            await sock.sendMessage(jid, { text: '❌ Amount nahi mila. Check karein.' });
+            await sock.sendMessage(jid, { text: '❌ Amount nahi mila.' });
             continue;
           }
 
-          // Duplicate check
           if (data.transaction_id) {
             try {
               const dup = await supabase('GET', `expenses?phonepay_txn_id=eq.${data.transaction_id}&select=id,name,amount`);
               if (Array.isArray(dup) && dup.length > 0) {
-                await sock.sendMessage(jid, { text: `⚠️ *Duplicate Entry Blocked!*\nYeh transaction pehle se add hai:\n${dup[0].name} — ${fmtINR(dup[0].amount)}` });
+                await sock.sendMessage(jid, { text: `⚠️ *Duplicate Entry Blocked!*\nPehele se add hai: ${dup[0].name} — ${fmtINR(dup[0].amount)}` });
                 continue;
               }
             } catch {}
@@ -994,38 +866,20 @@ async function startBot() {
 
           const category = detectCategory(data.message || '', data.paid_to_name || '');
           const catLabel = category === 'petrol_diesel' ? '⛽ Petrol/Diesel' : category === 'operator' ? '👷 Operator' : '📦 Other';
-          const entryName = [data.message, data.paid_to_name].filter(Boolean).join(' — ');
-          const entryDate = parseDate(data.date);
+          const entryName = data.message ? `${data.paid_to_name} (${data.message})` : data.paid_to_name || 'PhonePe Expense';
 
-          const serialCheck = await supabase('GET', `expenses?category=eq.${category}&select=serial_number&order=serial_number.desc&limit=1`);
-          const newSerial = (Number(serialCheck?.[0]?.serial_number) || 0) + 1;
-
-          const inserted = await supabase('POST', 'expenses', {
-            entry_date: entryDate,
-            serial_number: newSerial,
+          await supabase('POST', 'expenses', {
+            entry_date: today(),
             name: entryName,
             amount: data.amount,
             category,
             phonepay_txn_id: data.transaction_id || null
           });
 
-          console.log('📥 Supabase POST response:', JSON.stringify(inserted));
-
-          const savedRow = Array.isArray(inserted) ? inserted[0] : inserted;
-          if (!savedRow || savedRow.code || savedRow.error || !savedRow.id) {
-            console.error('❌ Insert failed in Supabase:', JSON.stringify(inserted));
-            await sock.sendMessage(jid, { text: `❌ Database mein save nahi hua.\nReason: ${savedRow?.message || 'RLS permission issue. Run the SQL script in Supabase.'}` });
-            continue;
-          }
-
-          lastInserted = savedRow;
-
-          const dateFmt = entryDate.split('-').reverse().join('-');
           await sock.sendMessage(jid, {
-            text: `✅ *Entry Add Ho Gayi!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${dateFmt}*\n💰 Amount: *${fmtINR(data.amount)}*\n📝 Name: *${entryName}*\n🏷️ Category: *${catLabel}*\n🔖 Txn ID: ${data.transaction_id || 'N/A'}\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete last" likho_`
+            text: `✅ *Expense Added!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${today().split('-').reverse().join('-')}*\n💰 Amount: *${fmtINR(data.amount)}*\n📝 Name: *${entryName}*\n🏷️ Category: *${catLabel}*\n🔖 Txn ID: ${data.transaction_id || 'N/A'}\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete last" likho_`
           });
 
-        // ── TEXT COMMAND ──────────────────────────────────────────────────
         } else {
           const text = msgContent.conversation || msgContent.extendedTextMessage?.text || '';
           if (!text) continue;
