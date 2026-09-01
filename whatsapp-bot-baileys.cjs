@@ -5,7 +5,7 @@
  * Run: node whatsapp-bot-baileys.cjs
  */
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, initAuthCreds, BufferJSON, proto } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadContentFromMessage, initAuthCreds, BufferJSON, proto } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const https = require('https');
@@ -25,6 +25,16 @@ const AUTH_FOLDER    = './baileys_auth';
 
 let currentPairingCode = null;
 let botStatus = 'Starting...';
+
+// ─── MEDIA DOWNLOAD HELPER ──────────────────────────────────────────────────
+async function getMediaBuffer(mediaMsg, mediaType) {
+  const stream = await downloadContentFromMessage(mediaMsg, mediaType);
+  let buffer = Buffer.alloc(0);
+  for await (const chunk of stream) {
+    buffer = Buffer.concat([buffer, chunk]);
+  }
+  return buffer;
+}
 
 // ─── HTTP DASHBOARD (Serves Pairing Code & Keeps Render Awake) ──────────────
 http.createServer((req, res) => {
@@ -1158,16 +1168,22 @@ async function startBot() {
         console.log(`📨 Message in "${TARGET_GROUP}" | fromMe: ${msg.key.fromMe} | Type: ${Object.keys(msgContent).join(', ')}`);
 
         // ── IMAGE: PhonePe Screenshot ─────────────────────────────────────
-        const imgMsg = msgContent.imageMessage || msgContent.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
-        const actualImg = msgContent.imageMessage;
+        const actualImg = msgContent.imageMessage || msgContent.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
 
         if (actualImg) {
-          console.log('🖼️ Image detected! Processing...');
-          await sock.sendMessage(jid, { text: '⏳ Screenshot padh raha hoon...' });
+          console.log('🖼️ Image detected! Downloading media stream...');
+          await sock.sendMessage(jid, { text: '⏳ Screenshot padh raha hoon...' }, { quoted: msg });
 
-          // Download image
-          const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-          const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
+          let buffer;
+          try {
+            buffer = await getMediaBuffer(actualImg, 'image');
+            console.log(`✅ Image stream downloaded (${buffer.length} bytes)!`);
+          } catch (dlErr) {
+            console.error('Media download error:', dlErr?.message || dlErr);
+            await sock.sendMessage(jid, { text: '❌ Image download nahi ho paaya. Kripya dobara bhejein.' }, { quoted: msg });
+            continue;
+          }
+
           const base64 = buffer.toString('base64');
           const mime = actualImg.mimetype || 'image/jpeg';
 
@@ -1175,8 +1191,8 @@ async function startBot() {
           try {
             data = await processPhonePeImage(base64, mime);
           } catch (e) {
-            console.error('Gemini error:', e.message);
-            await sock.sendMessage(jid, { text: '❌ Screenshot read nahi hua. Clear image bhejiye.' });
+            console.error('Gemini OCR error:', e.message);
+            await sock.sendMessage(jid, { text: '❌ Screenshot read nahi hua. Clear image bhejiye.' }, { quoted: msg });
             continue;
           }
 
