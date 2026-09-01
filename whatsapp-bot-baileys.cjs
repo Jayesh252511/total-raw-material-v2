@@ -998,9 +998,6 @@ async function startBot() {
 }
 
 // ─── SELF-PING KEEP-ALIVE (Prevents Render Free Service from Sleeping) ────
-const https = require('https');
-const http = require('http');
-
 function startSelfKeepAlive() {
   const renderUrl = process.env.RENDER_EXTERNAL_URL || 'https://total-raw-material-v2.onrender.com';
   console.log(`📡 Initializing 24/7 Keep-Alive self-ping for ${renderUrl}...`);
