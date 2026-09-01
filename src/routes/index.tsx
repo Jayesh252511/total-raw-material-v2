@@ -26,33 +26,34 @@ function ERPDashboard() {
     setExportOpen(true);
   };
 
-  const sellMoney = sells.reduce((s, e) => s + (Number(e.payment) || 0), 0);
-  const yearExpense = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-  const totalFlow = sellMoney + yearExpense;
-  const revPct = totalFlow > 0 ? Math.min(Math.round((sellMoney / totalFlow) * 100), 100) : 50;
-  const expPct = 100 - revPct;
-
   return (
     <ERPPageFrame>
-      {({ pcEntries, sells, expenses, settings, auditLogs, totalStock, effectiveMoney }) => (
-        <div className="space-y-4">
-          {/* Revenue vs Expense Health Progress Bar */}
-          <div className="rounded-xl border bg-card/90 backdrop-blur-sm p-3 sm:p-4 shadow-soft">
-            <div className="flex items-center justify-between gap-2 mb-2 text-xs font-semibold">
-              <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-                <span>Sell In: {fmtINR(sellMoney)} ({revPct}%)</span>
+      {({ pcEntries, sells, expenses, settings, auditLogs, totalStock, effectiveMoney }) => {
+        const sellMoney = (sells || []).reduce((s, e) => s + (Number(e.payment) || 0), 0);
+        const yearExpense = (expenses || []).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+        const totalFlow = sellMoney + yearExpense;
+        const revPct = totalFlow > 0 ? Math.min(Math.round((sellMoney / totalFlow) * 100), 100) : 50;
+        const expPct = 100 - revPct;
+
+        return (
+          <div className="space-y-4">
+            {/* Revenue vs Expense Health Progress Bar */}
+            <div className="rounded-xl border bg-card/90 backdrop-blur-sm p-3 sm:p-4 shadow-soft">
+              <div className="flex items-center justify-between gap-2 mb-2 text-xs font-semibold">
+                <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                  <span>Sell In: {fmtINR(sellMoney)} ({revPct}%)</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                  <span>Total Out: {fmtINR(yearExpense)} ({expPct}%)</span>
+                  <span className="h-2 w-2 rounded-full bg-rose-500"></span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
-                <span>Total Out: {fmtINR(yearExpense)} ({expPct}%)</span>
-                <span className="h-2 w-2 rounded-full bg-rose-500"></span>
+              <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted/80">
+                <div style={{ width: `${revPct}%` }} className="bg-emerald-500 transition-all duration-500"></div>
+                <div style={{ width: `${expPct}%` }} className="bg-rose-500 transition-all duration-500"></div>
               </div>
             </div>
-            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted/80">
-              <div style={{ width: `${revPct}%` }} className="bg-emerald-500 transition-all duration-500"></div>
-              <div style={{ width: `${expPct}%` }} className="bg-rose-500 transition-all duration-500"></div>
-            </div>
-          </div>
 
           {/* Quick Links */}
           <div className="grid gap-2.5 grid-cols-2 lg:grid-cols-5">
@@ -74,19 +75,20 @@ function ERPDashboard() {
 
           <AuditLogPanel logs={auditLogs.slice(0, 8)} sells={sells} expenses={expenses} rawMaterials={pcEntries as any} />
 
-          <ExportDialog
-            open={exportOpen}
-            onOpenChange={setExportOpen}
-            defaultFormat={exportFormat}
-            rawMaterials={pcEntries}
-            sells={sells}
-            expenses={expenses}
-            settings={settings}
-            totalStock={totalStock}
-            effectiveMoney={effectiveMoney}
-          />
-        </div>
-      )}
+            <ExportDialog
+              open={exportOpen}
+              onOpenChange={setExportOpen}
+              defaultFormat={exportFormat}
+              rawMaterials={pcEntries}
+              sells={sells}
+              expenses={expenses}
+              settings={settings}
+              totalStock={totalStock}
+              effectiveMoney={effectiveMoney}
+            />
+          </div>
+        );
+      }}
     </ERPPageFrame>
   );
 }
