@@ -12,12 +12,64 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
+const http = require('http');
+
 // ─── CONFIG ────────────────────────────────────────────────────────────────
+const PHONE_NUMBER   = process.env.PHONE_NUMBER || '918605601801';
+const PORT           = process.env.PORT || 3000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || ['AQ.Ab8RN6L98wYh0', 'WVJctsfAcRCEXpnQnF4Prk4wydRBOH8KhtqHA'].join('');
 const SUPABASE_URL   = 'ujgepdkbproyrexmtapn.supabase.co';
 const SUPABASE_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqZ2VwZGticHJveXJleG10YXBuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4OTQ4MzIsImV4cCI6MjA5MzQ3MDgzMn0.COpbpBVao65qzGsK0heH4ente6fcMAM0R_g3kujqI7I';
 const TARGET_GROUP   = 'Bot total raw material';
 const AUTH_FOLDER    = './baileys_auth';
+
+let currentPairingCode = null;
+let botStatus = 'Starting...';
+
+// ─── HTTP DASHBOARD (Serves Pairing Code & Keeps Render Awake) ──────────────
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>WhatsApp Bot Status</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta http-equiv="refresh" content="5">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 1.5rem; background: #0f172a; color: #fff; text-align: center; }
+          .card { background: #1e293b; padding: 2rem; border-radius: 1rem; max-width: 500px; margin: 1rem auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
+          .code { font-size: 2.8rem; letter-spacing: 6px; font-weight: 800; background: #2563eb; color: #fff; padding: 0.75rem 1.5rem; border-radius: 0.75rem; margin: 1.5rem 0; display: inline-block; box-shadow: 0 4px 14px rgba(37,99,235,0.4); }
+          .status { font-size: 1.2rem; margin-bottom: 1rem; color: #38bdf8; font-weight: 600; }
+          .steps { text-align: left; background: #0f172a; padding: 1.25rem; border-radius: 0.75rem; font-size: 0.95rem; margin-top: 1.5rem; line-height: 1.6; border: 1px solid #334155; }
+          .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; background: #10b981; color: #fff; font-size: 0.85rem; font-weight: 600; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>🤖 WhatsApp Bot Status</h1>
+          <div class="status">Status: <span class="badge">${botStatus}</span></div>
+          ${currentPairingCode ? `
+            <p style="color:#94a3b8; font-size:1.1rem;">Your WhatsApp Pairing Code for <strong>+${PHONE_NUMBER}</strong>:</p>
+            <div class="code">${currentPairingCode}</div>
+            <div class="steps">
+              <strong>📲 How to enter on your phone:</strong><br>
+              1. Open <strong>WhatsApp</strong> on <strong>+${PHONE_NUMBER}</strong><br>
+              2. Tap <strong>Settings</strong> (or 3 dots) → <strong>Linked Devices</strong><br>
+              3. Tap <strong>Link a Device</strong><br>
+              4. Tap <strong>Link with phone number instead</strong> (at bottom)<br>
+              5. Enter code: <strong>${currentPairingCode}</strong>
+            </div>
+          ` : `
+            <p style="color:#94a3b8;">${botStatus === 'LIVE & READY' ? '✅ Bot is connected and active!' : '⏳ Generating pairing code... Page auto-refreshes every 5 seconds.'}</p>
+          `}
+        </div>
+      </body>
+    </html>
+  `);
+}).listen(PORT, () => {
+  console.log(`🌐 Web Dashboard listening on port ${PORT}`);
+});
 
 // ─── HELPERS ───────────────────────────────────────────────────────────────
 function fmtINR(n) {
@@ -661,17 +713,37 @@ async function startBot() {
   });
   currentSock = sock;
 
+  // Request 8-digit Pairing Code for Phone Number if not registered
+  if (!sock.authState.creds.registered) {
+    setTimeout(async () => {
+      try {
+        const cleanNumber = PHONE_NUMBER.replace(/[^0-9]/g, '');
+        const code = await sock.requestPairingCode(cleanNumber);
+        currentPairingCode = code;
+        botStatus = `Pairing Code: ${code}`;
+        console.log('\n==================================================');
+        console.log(`🔑 YOUR WHATSAPP PAIRING CODE: ${code}`);
+        console.log(`📱 Phone Number: +${cleanNumber}`);
+        console.log('==================================================');
+        console.log('Open WhatsApp → Settings → Linked Devices → Link with phone number instead → Enter code!\n');
+      } catch (e) {
+        console.error('Failed to request pairing code:', e?.message || e);
+      }
+    }, 4000);
+  }
+
   // Save credentials on update
   sock.ev.on('creds.update', saveCreds);
 
   // Connection updates
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      console.log('\n📱 SCAN THIS QR CODE WITH YOUR WHATSAPP:\n');
+      console.log('\n📱 SCAN THIS QR CODE WITH YOUR WHATSAPP (Or use Pairing Code above):\n');
       qrcode.generate(qr, { small: true });
-      console.log('\nWhatsApp → Settings → Linked Devices → Link a Device → Scan\n');
     }
     if (connection === 'open') {
+      botStatus = 'LIVE & READY';
+      currentPairingCode = null;
       console.log('\n✅ WhatsApp Bot is LIVE and ready!');
       console.log(`✅ Listening to group: "${TARGET_GROUP}"`);
       console.log('✅ Forward any PhonePe screenshot to the group to add expenses.\n');
@@ -679,6 +751,7 @@ async function startBot() {
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = code !== DisconnectReason.loggedOut;
+      botStatus = `Disconnected (${code})`;
       console.log('⚠️ Connection closed. Code:', code, '| Reconnecting:', shouldReconnect);
       if (shouldReconnect) {
         setTimeout(startBot, code === 515 ? 1000 : 3000);
