@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { logAudit } from "@/lib/audit";
 import { toast } from "sonner";
 import { fmtINR } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 type Props = {
   children: React.ReactNode;
@@ -61,7 +62,6 @@ function AddFundsDialog({ currentMoney, effectiveMoney, currentLock, disabled }:
       total_after: nextTotal,
       lock_before: currentLock,
       lock_after: nextLock,
-      // Legacy compatibility for history logic
       added_money: n,
       before: currentMoney,
       after: nextTotal
@@ -110,8 +110,6 @@ function AddFundsDialog({ currentMoney, effectiveMoney, currentLock, disabled }:
     </Dialog>
   );
 }
-
-
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false);
@@ -182,14 +180,24 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
             </a>
           </div>
 
-          <nav className="hidden items-center gap-1 rounded-xl border border-border/50 bg-card/60 backdrop-blur-md p-1 shadow-soft lg:flex">
+          <nav className="hidden items-center gap-1 rounded-xl border border-border/50 bg-card/60 backdrop-blur-md p-1 shadow-soft md:flex">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.to;
               return (
-                <Button key={item.to} asChild variant={active ? "default" : "ghost"} size="sm" className="h-8 rounded-lg">
-                  <Link to={item.to}><Icon className="h-3.5 w-3.5" />{item.label}</Link>
-                </Button>
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all",
+                    active
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{item.label}</span>
+                </Link>
               );
             })}
           </nav>
