@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import type { Expense, PcEntry, Sell, Settings } from "@/lib/erpStore";
 import { ExportDialog } from "@/components/erp/ExportDialog";
 import { CommandPalette } from "@/components/erp/CommandPalette";
-import { AIChatWidget } from "@/components/erp/AIChatWidget";
 import { supabase } from "@/integrations/supabase/client";
 import { logAudit } from "@/lib/audit";
 import { toast } from "sonner";
@@ -237,7 +236,6 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
       </nav>
 
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} rawMaterials={rawMaterials} sells={sells} expenses={expenses} />
-      <AIChatWidget rawMaterials={rawMaterials} sells={sells} expenses={expenses} settings={settings} effectiveMoney={effectiveMoney} totalStock={totalStock} />
 
       <ExportDialog
         open={exportOpen}
