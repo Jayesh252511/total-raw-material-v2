@@ -963,6 +963,17 @@ async function isTargetGroup(sock, jid) {
     groupSubjectCache.set(jid, meta.subject);
     return meta.subject === TARGET_GROUP;
   }
+  try {
+    const groups = await sock.groupFetchAllParticipating();
+    for (const gId in groups) {
+      if (groups[gId]?.subject) {
+        groupSubjectCache.set(gId, groups[gId].subject);
+      }
+    }
+    if (groupSubjectCache.has(jid)) {
+      return groupSubjectCache.get(jid) === TARGET_GROUP;
+    }
+  } catch {}
   return false;
 }
 
@@ -1019,6 +1030,19 @@ async function startBot() {
       console.log(`✅ Listening to group: "${TARGET_GROUP}"`);
       console.log('✅ Forward any PhonePe screenshot to the group to add expenses.');
       console.log('✅ Send any Audio Voice Note to auto-transcribe and process commands!\n');
+
+      // Pre-fetch participating groups to cache target group JID instantly
+      try {
+        const groups = await sock.groupFetchAllParticipating();
+        for (const gId in groups) {
+          if (groups[gId]?.subject) {
+            groupSubjectCache.set(gId, groups[gId].subject);
+          }
+        }
+        console.log(`✅ Pre-cached ${groupSubjectCache.size} WhatsApp groups!`);
+      } catch (e) {
+        console.error('Group pre-fetch error:', e?.message || e);
+      }
 
       // ── 8:00 PM AUTOMATIC DAILY CLOSING BULLETIN SCHEDULE ──────────────────
       if (!global.bulletinInterval) {
