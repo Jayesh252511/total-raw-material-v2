@@ -229,18 +229,18 @@ function detectCategory(message, paidTo) {
 // ─── PROCESS PHONEPAY IMAGE ────────────────────────────────────────────────
 async function processPhonePeImage(imageBase64, mimeType) {
   const prompt = `This is a PhonePe payment screenshot from India.
-Read all text carefully. Return ONLY valid JSON:
+Read all text carefully. Extract the payment details: Date, Amount (number), Paid To Name, Message/Note, and PhonePe Transaction ID (starts with T).
+Return ONLY valid JSON:
 {
-  "date": "DD Month YYYY",
-  "amount": <number only>,
-  "paid_to_name": "<name>",
-  "message": "<Message field text>",
-  "transaction_id": "<PhonePe Transaction ID starting with T>"
-}
-Use null for missing fields.`;
+  "date": "31 August 2026",
+  "amount": 10000,
+  "paid_to_name": "Indian Oil",
+  "message": "Diesel",
+  "transaction_id": "T26083112345678"
+}`;
 
   const text = await callGemini([
-    { inline_data: { mime_type: mimeType, data: imageBase64 } },
+    { inlineData: { mimeType: mimeType || 'image/jpeg', data: imageBase64 } },
     { text: prompt }
   ]);
   const match = text.match(/\{[\s\S]*\}/);
@@ -279,7 +279,7 @@ Return ONLY a valid JSON object:
 }`;
 
   const text = await callGemini([
-    { inline_data: { mime_type: mimeType || 'audio/ogg; codecs=opus', data: audioBase64 } },
+    { inlineData: { mimeType: mimeType || 'audio/ogg; codecs=opus', data: audioBase64 } },
     { text: prompt }
   ]);
 
