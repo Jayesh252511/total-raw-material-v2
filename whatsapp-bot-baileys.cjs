@@ -28,11 +28,6 @@ let botStatus = 'Starting...';
 
 // ─── HTTP DASHBOARD (Serves Pairing Code & Keeps Render Awake) ──────────────
 http.createServer((req, res) => {
-  if (req.url === '/ping' || req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    return res.end('PONG_OK');
-  }
-
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(`
     <!DOCTYPE html>
@@ -76,17 +71,6 @@ http.createServer((req, res) => {
   console.log(`🌐 Web Dashboard listening on port ${PORT}`);
 });
 
-// ─── SELF-PINGER TIMER (Prevents Render Free Tier 15-min Sleep) ─────────────
-const RENDER_SERVICE_URL = process.env.RENDER_EXTERNAL_URL || 'https://total-raw-material-v2.onrender.com';
-setInterval(() => {
-  try {
-    const pingUrl = `${RENDER_SERVICE_URL}/ping`;
-    https.get(pingUrl, (res) => {
-      console.log(`📡 Keep-Alive pulse sent to Render (Status: ${res.statusCode})`);
-    }).on('error', () => {});
-  } catch {}
-}, 90 * 1000); // Pulse every 90 seconds for ultra-fast response
-
 // ─── HELPERS ───────────────────────────────────────────────────────────────
 function fmtINR(n) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(n) || 0);
@@ -99,122 +83,76 @@ const EXT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 
 // ─── SUPABASE ──────────────────────────────────────────────────────────────
 function supabase(method, urlPath, body) {
-  return new Promise((resolve) => {
-    try {
-      const payload = body ? JSON.stringify(body) : null;
-      const opts = {
-        hostname: SUPABASE_URL,
-        path: `/rest/v1/${urlPath}`,
-        method,
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          ...(method === 'POST' || method === 'PATCH' ? { 'Prefer': 'return=representation' } : {}),
-          ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
-        },
-        timeout: 10000
-      };
-      const req = https.request(opts, (res) => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          try { resolve(JSON.parse(data)); } catch { resolve([]); }
-        });
-      });
-      req.on('error', (err) => {
-        console.error('Supabase request error:', err?.message || err);
-        resolve([]);
-      });
-      req.on('timeout', () => {
-        req.destroy();
-        console.error('Supabase request timeout:', urlPath);
-        resolve([]);
-      });
-      if (payload) req.write(payload);
-      req.end();
-    } catch {
-      resolve([]);
-    }
+  return new Promise((resolve, reject) => {
+    const payload = body ? JSON.stringify(body) : null;
+    const opts = {
+      hostname: SUPABASE_URL,
+      path: `/rest/v1/${urlPath}`,
+      method,
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        ...(method === 'POST' || method === 'PATCH' ? { 'Prefer': 'return=representation' } : {}),
+        ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
+      }
+    };
+    const req = https.request(opts, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(data); } });
+    });
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
   });
 }
 
 function fetchExt(urlPath) {
-  return new Promise((resolve) => {
-    try {
-      const opts = {
-        hostname: EXT_URL,
-        path: `/rest/v1/${urlPath}`,
-        method: 'GET',
-        headers: {
-          'apikey': EXT_KEY,
-          'Authorization': `Bearer ${EXT_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 10000
-      };
-      const req = https.request(opts, (res) => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          try { resolve(JSON.parse(data)); } catch { resolve([]); }
-        });
-      });
-      req.on('error', (err) => {
-        console.error('Ext fetch error:', err?.message || err);
-        resolve([]);
-      });
-      req.on('timeout', () => {
-        req.destroy();
-        console.error('Ext fetch timeout:', urlPath);
-        resolve([]);
-      });
-      req.end();
-    } catch {
-      resolve([]);
-    }
+  return new Promise((resolve, reject) => {
+    const opts = {
+      hostname: EXT_URL,
+      path: `/rest/v1/${urlPath}`,
+      method: 'GET',
+      headers: {
+        'apikey': EXT_KEY,
+        'Authorization': `Bearer ${EXT_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    };
+    const req = https.request(opts, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(data); } });
+    });
+    req.on('error', reject);
+    req.end();
   });
 }
 
-// ─── GEMINI API CALL (With Model Fallback) ─────────────────────────────────
+// ─── GEMINI ────────────────────────────────────────────────────────────────
 function callGemini(parts) {
-  const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
-  return new Promise((resolve) => {
-    let attempt = 0;
-
-    function tryNext() {
-      if (attempt >= models.length) {
-        return resolve('');
-      }
-      const model = models[attempt++];
-      const payload = JSON.stringify({ contents: [{ parts }] });
-      const cleanKey = GEMINI_API_KEY.replace(/[^a-zA-Z0-9_\-]/g, '');
-      const opts = {
-        hostname: 'generativelanguage.googleapis.com',
-        path: `/v1beta/models/${model}:generateContent?key=${cleanKey}`,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
-      };
-      const req = https.request(opts, (res) => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(data);
-            const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) {
-              return resolve(text);
-            }
-          } catch {}
-          tryNext();
-        });
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({ contents: [{ parts }] });
+    const opts = {
+      hostname: 'generativelanguage.googleapis.com',
+      path: `/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+    };
+    const req = https.request(opts, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed?.candidates?.[0]?.content?.parts?.[0]?.text || '');
+        } catch { resolve(''); }
       });
-      req.on('error', () => tryNext());
-      req.write(payload);
-      req.end();
-    }
-
-    tryNext();
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
   });
 }
 
@@ -981,40 +919,6 @@ async function useCombinedAuthState(folder) {
   return { state: localAuth.state, saveCreds };
 }
 
-// ─── FAST IN-MEMORY GROUP CACHE (Eliminates Network Delays) ────────────────
-const groupSubjectCache = new Map();
-
-async function isTargetGroup(sock, jid) {
-  if (!jid || !jid.endsWith('@g.us')) return false; // STRICT: Ignore ALL personal DMs and personal chats!
-
-  function matchesTargetGroup(subj) {
-    if (!subj) return false;
-    const s = subj.trim().toLowerCase();
-    return s.includes('total raw material') || s === TARGET_GROUP.trim().toLowerCase();
-  }
-
-  if (groupSubjectCache.has(jid)) {
-    return matchesTargetGroup(groupSubjectCache.get(jid));
-  }
-  const meta = await sock.groupMetadata(jid).catch(() => null);
-  if (meta?.subject) {
-    groupSubjectCache.set(jid, meta.subject);
-    return matchesTargetGroup(meta.subject);
-  }
-  try {
-    const groups = await sock.groupFetchAllParticipating();
-    for (const gId in groups) {
-      if (groups[gId]?.subject) {
-        groupSubjectCache.set(gId, groups[gId].subject);
-        if (gId === jid) {
-          return matchesTargetGroup(groups[gId].subject);
-        }
-      }
-    }
-  } catch {}
-  return false;
-}
-
 let currentSock = null;
 
 // ─── MAIN BOT ──────────────────────────────────────────────────────────────
@@ -1030,14 +934,11 @@ async function startBot() {
   const sock = makeWASocket({
     version,
     auth: state,
-    logger: pino({ level: 'silent' }),
+    logger: pino({ level: 'silent' }), // silent = no debug spam
     printQRInTerminal: false,
     browser: ['Ubuntu', 'Chrome', '20.0.04'],
-    markOnlineOnConnect: true,
-    syncFullHistory: false,
-    keepAliveIntervalMs: 10000, // Keep WebSocket connection hot every 10s
-    connectTimeoutMs: 60000,
-    retryRequestDelayMs: 250
+    markOnlineOnConnect: false,
+    syncFullHistory: false
   });
   currentSock = sock;
 
@@ -1068,19 +969,6 @@ async function startBot() {
       console.log(`✅ Listening to group: "${TARGET_GROUP}"`);
       console.log('✅ Forward any PhonePe screenshot to the group to add expenses.');
       console.log('✅ Send any Audio Voice Note to auto-transcribe and process commands!\n');
-
-      // Pre-fetch participating groups to cache target group JID instantly
-      try {
-        const groups = await sock.groupFetchAllParticipating();
-        for (const gId in groups) {
-          if (groups[gId]?.subject) {
-            groupSubjectCache.set(gId, groups[gId].subject);
-          }
-        }
-        console.log(`✅ Pre-cached ${groupSubjectCache.size} WhatsApp groups!`);
-      } catch (e) {
-        console.error('Group pre-fetch error:', e?.message || e);
-      }
 
       // ── 8:00 PM AUTOMATIC DAILY CLOSING BULLETIN SCHEDULE ──────────────────
       if (!global.bulletinInterval) {
@@ -1136,8 +1024,12 @@ async function startBot() {
 
         // Get chat info
         const jid = msg.key.remoteJid;
-        // Check if message is from target group or direct chat (0.0001ms)
-        if (!(await isTargetGroup(sock, jid))) continue;
+        const isGroup = jid.endsWith('@g.us');
+        if (!isGroup) continue;
+
+        // Get group name
+        const groupMeta = await sock.groupMetadata(jid).catch(() => null);
+        if (!groupMeta || groupMeta.subject !== TARGET_GROUP) continue;
 
         const msgContent = msg.message;
         if (!msgContent) continue;
@@ -1155,6 +1047,36 @@ async function startBot() {
         }
 
         console.log(`📨 Message in "${TARGET_GROUP}" | fromMe: ${msg.key.fromMe} | Type: ${Object.keys(msgContent).join(', ')}`);
+
+        // ── AUDIO VOICE NOTE ("Bolee Bot") ──────────────────────────────────
+        const audioMsg = msgContent.audioMessage || msgContent.pttMessage;
+        if (audioMsg) {
+          console.log('🎙️ Audio Voice Note detected! Processing with Gemini...');
+          await sock.sendMessage(jid, { text: '🎙️ *Aapka voice note sun raha hoon...*' });
+
+          const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+          const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
+          const base64 = buffer.toString('base64');
+          const mime = audioMsg.mimetype || 'audio/ogg; codecs=opus';
+
+          let audioResult;
+          try {
+            audioResult = await processVoiceAudio(base64, mime);
+          } catch (e) {
+            console.error('Voice audio error:', e.message);
+            await sock.sendMessage(jid, { text: '❌ Voice note samajh nahi aaya. Kripya dobara clear bolein.' });
+            continue;
+          }
+
+          console.log(`🎙️ Voice Transcript: "${audioResult.transcript}" | Command: "${audioResult.command}"`);
+
+          const sender = msg.key.participant || msg.key.remoteJid;
+          const replyText = await handleText(audioResult.command, sender);
+
+          const voiceHeader = `🎙️ *Voice Note Received:* "${audioResult.transcript}"\n━━━━━━━━━━━━━━━━━━━━\n`;
+          await sock.sendMessage(jid, { text: voiceHeader + replyText });
+          continue;
+        }
 
         // ── IMAGE: PhonePe Screenshot ─────────────────────────────────────
         const imgMsg = msgContent.imageMessage || msgContent.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
@@ -1228,25 +1150,16 @@ async function startBot() {
           const dateFmt = entryDate.split('-').reverse().join('-');
           await sock.sendMessage(jid, {
             text: `✅ *Entry Add Ho Gayi!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${dateFmt}*\n💰 Amount: *${fmtINR(data.amount)}*\n📝 Name: *${entryName}*\n🏷️ Category: *${catLabel}*\n🔖 Txn ID: ${data.transaction_id || 'N/A'}\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete last" likho_`
-          }, { quoted: msg });
+          });
 
         // ── TEXT COMMAND ──────────────────────────────────────────────────
         } else {
           const text = msgContent.conversation || msgContent.extendedTextMessage?.text || '';
           if (!text) continue;
-          const sender = msg.key.participant || msg.key.remoteJid || 'default';
-          console.log(`💬 Processing command: "${text}" from ${sender}`);
-          try {
-            const reply = await handleText(text, sender);
-            if (reply) {
-              console.log(`📤 Sending quoted reply (${reply.length} chars) to ${jid}...`);
-              const sendRes = await sock.sendMessage(jid, { text: reply }, { quoted: msg });
-              if (sendRes) console.log('✅ Reply sent successfully to WhatsApp!');
-            }
-          } catch (cmdErr) {
-            console.error('❌ Command execution error:', cmdErr?.message || cmdErr);
-            await sock.sendMessage(jid, { text: `❌ Command process karne mein error aaya: ${cmdErr?.message || 'Unknown error'}` }, { quoted: msg }).catch(() => {});
-          }
+          console.log(`💬 Text: "${text}"`);
+          const sender = msg.key.participant || msg.key.remoteJid;
+          const reply = await handleText(text, sender);
+          if (reply) await sock.sendMessage(jid, { text: reply });
         }
 
       } catch (err) {

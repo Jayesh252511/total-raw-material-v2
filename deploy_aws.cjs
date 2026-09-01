@@ -12,21 +12,11 @@ async function deployToAWS(accessKeyId, secretAccessKey, region = 'ap-south-1') 
     region,
     credentials: { accessKeyId, secretAccessKey }
   });
-  const localEnv = fs.existsSync('.env') ? fs.readFileSync('.env', 'utf8') : '';
-  const localEnvB64 = Buffer.from(localEnv).toString('base64');
 
   // User Data script that runs on EC2 startup automatically
   const userDataScript = `#!/bin/bash
 exec > /var/log/user-data.log 2>&1
 echo "Starting 24/7 WhatsApp Bot Setup..."
-
-# Add 1GB Swap to prevent OOM memory issues on t3.micro
-if [ ! -f /swapfile ]; then
-  dd if=/dev/zero of=/swapfile bs=1M count=1024
-  chmod 600 /swapfile
-  mkswap /swapfile
-  swapon /swapfile
-fi
 
 # Update system & install Node.js 20 & Git
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
@@ -42,11 +32,8 @@ cd /opt/app
 git clone https://github.com/Jayesh252511/total-raw-material-v2.git repo
 cd repo
 
-# Inject .env file
-echo "${localEnvB64}" | base64 -d > /opt/app/repo/.env
-
-# Install dependencies (only required bot packages)
-npm install --no-audit --no-fund
+# Install dependencies
+npm install
 
 # Start bot with PM2 (Auto-restarts if crashes / server reboots)
 pm2 start whatsapp-bot-baileys.cjs --name "whatsapp-bot"
