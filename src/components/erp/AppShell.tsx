@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
-import { BarChart3, Boxes, FileSpreadsheet, FileText, Home, Layers, Lock, ReceiptText, ShoppingCart, Wallet, Plus } from "lucide-react";
+import { BarChart3, Boxes, FileSpreadsheet, FileText, Home, Layers, Lock, ReceiptText, ShoppingCart, Wallet, Plus, Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AuthButton } from "@/components/erp/AuthButton";
 import { SettingsDialog } from "@/components/erp/SettingsDialog";
@@ -112,20 +112,30 @@ function AddFundsDialog({ currentMoney, effectiveMoney, currentLock, disabled }:
 
 
 function ThemeToggle() {
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+  const [dark, setDark] = useState(false);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      setDark(document.documentElement.classList.contains("dark"));
+    }
+  }, []);
+
   const toggle = () => {
     const next = !dark;
     setDark(next);
-    if (next) {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
+    if (typeof document !== "undefined") {
+      if (next) {
+        document.documentElement.classList.add("dark");
+        localStorage.setItem("theme", "dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+        localStorage.setItem("theme", "light");
+      }
     }
   };
+
   return (
-    <Button variant="outline" size="icon" onClick={toggle} className="h-8 w-8 rounded-lg border-border/60 hover:bg-accent">
+    <Button variant="outline" size="icon" onClick={toggle} className="h-8 w-8 rounded-lg border-border/60 hover:bg-accent" title="Toggle Light/Dark Theme">
       {dark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-indigo-600" />}
     </Button>
   );
