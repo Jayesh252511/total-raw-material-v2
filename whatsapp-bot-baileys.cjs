@@ -1180,12 +1180,17 @@ async function forceSaveSessionToSupabase() {
 
         const jid = msg.key.remoteJid;
         const isGroup = jid.endsWith('@g.us');
-        if (!isGroup) continue;
+        let subject = null;
 
-        const subject = await getGroupSubject(jid);
-        // If subject is known and does not match target group, skip
-        if (subject && subject.trim().toLowerCase() !== TARGET_GROUP.trim().toLowerCase()) {
-          continue;
+        if (isGroup) {
+          subject = await getGroupSubject(jid);
+          const normSub = (subject || '').toLowerCase().trim();
+          const normTarget = TARGET_GROUP.toLowerCase().trim();
+          const isMatch = !subject || normSub === normTarget || normSub.includes('total raw material') || normSub.includes('bot total');
+          if (!isMatch) {
+            console.log(`⏭️ Skipping group "${subject}" (does not match target "${TARGET_GROUP}")`);
+            continue;
+          }
         }
 
         const msgContent = msg.message;
@@ -1201,7 +1206,7 @@ async function forceSaveSessionToSupabase() {
           continue;
         }
 
-        console.log(`📨 Message in "${subject || TARGET_GROUP}" | text: "${textContent}" | fromMe: ${msg.key.fromMe}`);
+        console.log(`📩 RECEIVED [${isGroup ? 'GROUP: ' + (subject || jid) : 'DM'}] | text: "${textContent}" | fromMe: ${msg.key.fromMe}`);
 
         // Image PhonePe
         const actualImg = extractImageMessage(msgContent);
