@@ -1120,6 +1120,44 @@ async function forceSaveSessionToSupabase() {
     }
   });
 
+  // Group Subject Cache to avoid WhatsApp rate limits
+  const groupSubjectCache = new Map();
+
+  async function getGroupSubject(jid) {
+    if (groupSubjectCache.has(jid)) return groupSubjectCache.get(jid);
+    try {
+      const meta = await sock.groupMetadata(jid);
+      if (meta?.subject) {
+        groupSubjectCache.set(jid, meta.subject);
+        return meta.subject;
+      }
+    } catch (e) {
+      // If groupMetadata fails, return cached subject if any
+    }
+    return groupSubjectCache.get(jid) || null;
+  }
+
+  function extractText(msg) {
+    if (!msg) return '';
+    if (typeof msg === 'string') return msg;
+    if (msg.conversation) return msg.conversation;
+    if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text;
+    if (msg.ephemeralMessage?.message) return extractText(msg.ephemeralMessage.message);
+    if (msg.viewOnceMessage?.message) return extractText(msg.viewOnceMessage.message);
+    if (msg.viewOnceMessageV2?.message) return extractText(msg.viewOnceMessageV2.message);
+    if (msg.documentWithCaptionMessage?.message) return extractText(msg.documentWithCaptionMessage.message);
+    return '';
+  }
+
+  function extractImageMessage(msg) {
+    if (!msg) return null;
+    if (msg.imageMessage) return msg.imageMessage;
+    if (msg.ephemeralMessage?.message) return extractImageMessage(msg.ephemeralMessage.message);
+    if (msg.viewOnceMessage?.message) return extractImageMessage(msg.viewOnceMessage.message);
+    if (msg.viewOnceMessageV2?.message) return extractImageMessage(msg.viewOnceMessageV2.message);
+    return null;
+  }
+
   // Messages
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     for (const msg of messages) {
@@ -1130,13 +1168,16 @@ async function forceSaveSessionToSupabase() {
         const isGroup = jid.endsWith('@g.us');
         if (!isGroup) continue;
 
-        const groupMeta = await sock.groupMetadata(jid).catch(() => null);
-        if (!groupMeta || groupMeta.subject !== TARGET_GROUP) continue;
+        const subject = await getGroupSubject(jid);
+        // If subject is known and does not match target group, skip
+        if (subject && subject.trim().toLowerCase() !== TARGET_GROUP.trim().toLowerCase()) {
+          continue;
+        }
 
         const msgContent = msg.message;
         if (!msgContent) continue;
 
-        const textContent = msgContent.conversation || msgContent.extendedTextMessage?.text || '';
+        const textContent = extractText(msgContent);
         const BOT_REPLY_PREFIXES = [
           '⏳', '✅', '❌', '⚠️', '📊', '💰', '⛽', '👷', '🗑️', '🤖', '💵',
           '📦 *STOCK', '🔒 *Lock', '🛒 *SELL', '📋 *DATA', '📄 *PDF', '📝', '👤', '⚖️', '💳', '🚛',
@@ -1146,10 +1187,10 @@ async function forceSaveSessionToSupabase() {
           continue;
         }
 
-        console.log(`📨 Message in "${TARGET_GROUP}" | fromMe: ${msg.key.fromMe}`);
+        console.log(`📨 Message in "${subject || TARGET_GROUP}" | text: "${textContent}" | fromMe: ${msg.key.fromMe}`);
 
         // Image PhonePe
-        const actualImg = msgContent.imageMessage;
+        const actualImg = extractImageMessage(msgContent);
         if (actualImg) {
           console.log('🖼️ Image detected! Processing...');
           await sock.sendMessage(jid, { text: '⏳ Screenshot padh raha hoon...' });
@@ -1198,17 +1239,15 @@ async function forceSaveSessionToSupabase() {
             text: `✅ *Expense Added!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${today().split('-').reverse().join('-')}*\n💰 Amount: *${fmtINR(data.amount)}*\n📝 Name: *${entryName}*\n🏷️ Category: *${catLabel}*\n🔖 Txn ID: ${data.transaction_id || 'N/A'}\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete last" likho_`
           });
 
-        } else {
-          const text = msgContent.conversation || msgContent.extendedTextMessage?.text || '';
-          if (!text) continue;
-          console.log(`💬 Text: "${text}"`);
+        } else if (textContent) {
+          console.log(`💬 Text command: "${textContent}"`);
           const sender = msg.key.participant || msg.key.remoteJid;
-          const reply = await handleText(text, sender);
+          const reply = await handleText(textContent, sender);
           if (reply) await sock.sendMessage(jid, { text: reply });
         }
 
       } catch (err) {
-        console.error('❌ Error:', err?.message || err);
+        console.error('❌ Message processing error:', err?.message || err);
       }
     }
   });
