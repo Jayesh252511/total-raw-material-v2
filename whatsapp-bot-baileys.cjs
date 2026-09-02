@@ -943,8 +943,8 @@ async function saveSessionToSupabase() {
 async function restoreSessionFromSupabase() {
   try {
     const rows = await loadAllAuthFiles();
-    if (!Array.isArray(rows) || rows.length === 0) {
-      console.log('ℹ️ No session files found in Supabase bot_auth_files.');
+    if (!Array.isArray(rows) || rows.length < 3) {
+      console.log(`ℹ️ Session files in Supabase incomplete (${rows?.length || 0} files, min 3 needed) — fresh login needed.`);
       return false;
     }
 
@@ -975,7 +975,7 @@ async function restoreSessionFromSupabase() {
         console.error(`Failed writing auth file ${key}:`, e.message);
       }
     }
-    console.log(`✅ Restored ${rows.length} WhatsApp session files from Supabase!`);
+    console.log(`✅ Restored FULL ${rows.length} WhatsApp session files from Supabase!`);
     return true;
   } catch (e) {
     console.error('Session restore error:', e?.message || e);
@@ -1104,14 +1104,20 @@ async function forceSaveSessionToSupabase() {
       // Force save active session state to Supabase DB immediately on connect
       await forceSaveSessionToSupabase();
 
-      // ✅ Periodic session backup every 10 minutes while connected
+      // Delay 10 seconds and force save again so all 20+ pre-keys emitted after handshake are saved
+      setTimeout(async () => {
+        await forceSaveSessionToSupabase();
+        console.log('🔒 FULL MULTI-FILE PRE-KEY SESSION BACKED UP TO SUPABASE!');
+      }, 10000);
+
+      // Periodic session backup every 5 minutes while connected
       if (sock._sessionSaveInterval) clearInterval(sock._sessionSaveInterval);
       sock._sessionSaveInterval = setInterval(async () => {
         if (botStatus === 'LIVE & READY 24/7') {
           await forceSaveSessionToSupabase();
-          console.log('🔄 Periodic 10-min session backup done.');
+          console.log('🔄 Periodic 5-min session backup done.');
         }
-      }, 10 * 60 * 1000);
+      }, 5 * 60 * 1000);
     }
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
