@@ -422,7 +422,7 @@ async function handleText(text, sender = 'default') {
   // ── 0. DIRECT REPORT MATCH ───────────────────────────────────────────────
   if (/^report$|^summary$|^dashboard$/i.test(t) || /report|dashboard|dikhao|batao|bata|summary|status|poora|pura|full/.test(t)) {
     if (!/petrol|operator|majuri|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(t)) {
-      return generateReport();
+      return await generateReport();
     }
   }
 
@@ -1259,10 +1259,16 @@ async function forceSaveSessionToSupabase() {
           });
 
         } else if (textContent) {
-          console.log(`💬 Text command: "${textContent}"`);
+          console.log(`💬 Processing text command: "${textContent}"`);
           const sender = msg.key.participant || msg.key.remoteJid;
           const reply = await handleText(textContent, sender);
-          if (reply) await sock.sendMessage(jid, { text: reply });
+          if (reply) {
+            console.log(`📤 SENDING REPLY to ${jid}: "${reply.slice(0, 40).replace(/\n/g, ' ')}..."`);
+            await sock.sendMessage(jid, { text: reply });
+            console.log(`✅ REPLY SENT to ${jid}!`);
+          } else {
+            console.log(`⚠️ handleText returned empty/null for: "${textContent}"`);
+          }
         }
 
       } catch (err) {
