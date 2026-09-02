@@ -40,6 +40,7 @@ http.createServer((req, res) => {
   }
 
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  const isLive = botStatus.includes('LIVE');
   res.end(`
     <!DOCTYPE html>
     <html>
@@ -60,13 +61,29 @@ http.createServer((req, res) => {
       <body>
         <div class="card">
           <h1>🤖 WhatsApp Bot Dashboard</h1>
-          <div class="status">Status: <span id="statusBadge" class="badge badge-warn">Checking...</span></div>
-          <div id="contentArea"></div>
+          <div class="status">Status: <span id="statusBadge" class="badge ${isLive ? 'badge-live' : 'badge-warn'}">${botStatus}</span></div>
+          <div id="contentArea">
+            ${currentQRCodeImage ? `
+              <div class="qr-box"><img src="${currentQRCodeImage}" style="width:280px; height:280px; display:block;" /></div>
+              <p style="color:#38bdf8; font-size:1.1rem; font-weight:bold; margin-top:0.5rem;">📷 Scan this QR Code with WhatsApp Camera!</p>
+            ` : ''}
+            ${currentPairingCode ? `
+              <div style="margin-top:1.25rem; border-top:1px solid #334155; padding-top:1rem;">
+                <p style="color:#94a3b8; font-size:1rem;">Or enter 8-Digit Pairing Code on phone:</p>
+                <div class="code">${currentPairingCode}</div>
+              </div>
+            ` : ''}
+            ${!currentQRCodeImage && !currentPairingCode ? `
+              <p style="color:#94a3b8; font-size:1.1rem; margin-top:1rem;">
+                ${isLive ? '✅ Bot is connected and running 24/7!' : '⏳ Connecting to WhatsApp... Please wait.'}
+              </p>
+            ` : ''}
+          </div>
         </div>
 
         <script>
-          let lastQr = null;
-          let lastCode = null;
+          let lastQr = ${JSON.stringify(currentQRCodeImage)};
+          let lastCode = ${JSON.stringify(currentPairingCode)};
 
           async function updateStatus() {
             try {
@@ -100,7 +117,6 @@ http.createServer((req, res) => {
               content.innerHTML = html;
             } catch (e) {}
           }
-          updateStatus();
           setInterval(updateStatus, 2000);
         </script>
       </body>
