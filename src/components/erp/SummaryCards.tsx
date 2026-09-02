@@ -14,23 +14,29 @@ type Stat = {
   onClick?: () => void;
 };
 
-function Sparkline({ tone }: { tone: string }) {
-  const strokeColor = tone === 'success' ? '#10b981' : tone === 'warning' ? '#f59e0b' : tone === 'danger' ? '#f43f5e' : tone === 'info' ? '#38bdf8' : '#6366f1';
-  const isDown = tone === 'danger';
-  return (
-    <svg className="w-12 h-5 opacity-65 group-hover:opacity-100 transition-opacity" viewBox="0 0 60 25" fill="none">
-      <path
-        d={isDown ? "M 2 5 Q 15 10, 30 18 T 58 22" : "M 2 20 Q 15 15, 30 10 T 58 3"}
-        stroke={strokeColor}
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
+// Tone → gradient color pairs for the card bg strip
+const TONE_GRADIENT: Record<string, { from: string; to: string; icon: string; border: string; badge: string }> = {
+  primary:  { from: "rgba(99,102,241,0.13)", to: "rgba(99,102,241,0)",   icon: "rgba(99,102,241,0.08)",  border: "rgba(99,102,241,0.22)", badge: "#6366f1" },
+  success:  { from: "rgba(16,185,129,0.13)", to: "rgba(16,185,129,0)",   icon: "rgba(16,185,129,0.08)",  border: "rgba(16,185,129,0.22)", badge: "#10b981" },
+  warning:  { from: "rgba(245,158,11,0.13)", to: "rgba(245,158,11,0)",   icon: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.22)", badge: "#f59e0b" },
+  info:     { from: "rgba(56,189,248,0.13)", to: "rgba(56,189,248,0)",   icon: "rgba(56,189,248,0.08)",  border: "rgba(56,189,248,0.22)", badge: "#38bdf8" },
+  danger:   { from: "rgba(244,63,94,0.13)",  to: "rgba(244,63,94,0)",    icon: "rgba(244,63,94,0.08)",   border: "rgba(244,63,94,0.22)",  badge: "#f43f5e" },
+};
+
+const TONE_TEXT: Record<string, string> = {
+  primary: "#818cf8",
+  success: "#34d399",
+  warning: "#fbbf24",
+  info:    "#7dd3fc",
+  danger:  "#fb7185",
+};
 
 function Card({ s }: { s: Stat }) {
   const Icon = s.icon;
+  const tone = s.tone ?? "primary";
+  const colors = TONE_GRADIENT[tone];
+  const textColor = TONE_TEXT[tone];
+
   const cardRef = useRef<HTMLElement>(null);
   const [transform, setTransform] = useState("perspective(1000px) rotateX(0deg) rotateY(0deg)");
   const [spotlight, setSpotlight] = useState({ x: 50, y: 50, opacity: 0 });
@@ -42,10 +48,8 @@ function Card({ s }: { s: Stat }) {
     const y = e.clientY - rect.top;
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
-
-    const rotateX = -((y - centerY) / centerY) * 6;
-    const rotateY = ((x - centerX) / centerX) * 6;
-
+    const rotateX = -((y - centerY) / centerY) * 5;
+    const rotateY = ((x - centerX) / centerX) * 5;
     setTransform(`perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) scale3d(1.02, 1.02, 1.02)`);
     setSpotlight({ x: Math.round((x / rect.width) * 100), y: Math.round((y / rect.height) * 100), opacity: 1 });
   };
@@ -53,21 +57,6 @@ function Card({ s }: { s: Stat }) {
   const handleMouseLeave = () => {
     setTransform("perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)");
     setSpotlight((prev) => ({ ...prev, opacity: 0 }));
-  };
-
-  const toneMap = {
-    primary: "text-primary bg-primary/10 border-primary/20",
-    success: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
-    warning: "text-amber-500 bg-amber-500/10 border-amber-500/20",
-    info: "text-sky-500 bg-sky-500/10 border-sky-500/20",
-    danger: "text-rose-500 bg-rose-500/10 border-rose-500/20",
-  };
-  const glowMap = {
-    primary: "glow-card-primary",
-    success: "glow-card-success",
-    warning: "glow-card-warning",
-    info: "glow-card-info",
-    danger: "glow-card-danger",
   };
 
   const Comp = s.onClick ? "button" : "div";
@@ -78,35 +67,92 @@ function Card({ s }: { s: Stat }) {
       onClick={s.onClick}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      style={{ transform, transition: "transform 0.15s ease-out, box-shadow 0.3s ease" }}
+      style={{
+        transform,
+        transition: "transform 0.15s ease-out",
+        border: `1px solid ${colors.border}`,
+        background: `linear-gradient(115deg, ${colors.from} 0%, transparent 60%)`,
+      }}
       className={cn(
-        "group relative rounded-xl border bg-card/90 backdrop-blur-md p-3.5 sm:p-4 shadow-soft text-left w-full overflow-hidden flex flex-col justify-between min-h-[102px] transform-gpu",
-        glowMap[s.tone ?? "primary"],
-        s.onClick && "cursor-pointer hover:border-primary/50"
+        "group relative rounded-xl backdrop-blur-md p-4 sm:p-4 text-left w-full overflow-hidden flex flex-col justify-between min-h-[108px] transform-gpu",
+        s.onClick && "cursor-pointer"
       )}
     >
-      {/* 3D Laser Spotlight Effect */}
+      {/* Very subtle base background fill */}
+      <div
+        className="absolute inset-0 rounded-xl"
+        style={{ background: "rgba(15,23,42,0.55)" }}
+      />
+
+      {/* Streaming-card style large ghost icon — right side like a character portrait, very low opacity */}
+      <div
+        className="pointer-events-none absolute right-0 bottom-0 h-full flex items-end justify-end overflow-hidden rounded-xl"
+        style={{ width: "52%" }}
+      >
+        <div
+          className="relative flex items-center justify-center"
+          style={{
+            width: "110px",
+            height: "110px",
+            background: `radial-gradient(ellipse at 60% 60%, ${colors.icon} 0%, transparent 75%)`,
+            borderRadius: "50%",
+            transform: "translate(20%, 25%)",
+          }}
+        >
+          <Icon
+            className="absolute"
+            style={{
+              width: "72px",
+              height: "72px",
+              color: textColor,
+              opacity: 0.10,
+              strokeWidth: 1.2,
+              filter: "blur(0.5px)",
+              transition: "opacity 0.3s",
+            }}
+          />
+        </div>
+        {/* On hover, icon becomes slightly more visible */}
+        <Icon
+          className="absolute right-3 bottom-3 opacity-0 group-hover:opacity-[0.18] transition-opacity duration-300"
+          style={{ width: "28px", height: "28px", color: textColor, strokeWidth: 1.5 }}
+        />
+      </div>
+
+      {/* Left-side gradient strip — like the colored band in streaming cards */}
+      <div
+        className="pointer-events-none absolute left-0 top-0 bottom-0 w-1 rounded-l-xl"
+        style={{ background: colors.badge, opacity: 0.7 }}
+      />
+
+      {/* Laser cursor spotlight */}
       <div
         className="pointer-events-none absolute -inset-px transition-opacity duration-300 rounded-xl"
         style={{
           opacity: spotlight.opacity,
-          background: `radial-gradient(350px circle at ${spotlight.x}% ${spotlight.y}%, rgba(99, 102, 241, 0.18), transparent 70%)`
+          background: `radial-gradient(280px circle at ${spotlight.x}% ${spotlight.y}%, ${colors.from.replace("0.13", "0.22")}, transparent 65%)`
         }}
       />
 
-      <div className="flex items-start justify-between gap-2 relative z-10">
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{s.label}</p>
-          <p className="mt-1 text-base sm:text-lg font-bold tracking-tight tabular-nums truncate">{s.value}</p>
-        </div>
-        <div className={cn("flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border transition-transform group-hover:scale-110", toneMap[s.tone ?? "primary"])}>
-          <Icon className="h-4 w-4" strokeWidth={2.2} />
-        </div>
-      </div>
+      {/* Content */}
+      <div className="relative z-10 flex-1 flex flex-col justify-between pl-2">
+        {/* Top row: label */}
+        <p
+          className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-widest truncate"
+          style={{ color: textColor, opacity: 0.8 }}
+        >
+          {s.label}
+        </p>
 
-      <div className="mt-2 flex items-center justify-between gap-2 pt-1 border-t border-border/30 relative z-10">
-        <p className="text-[10px] text-muted-foreground truncate max-w-[65%]">{s.hint || "Live metric"}</p>
-        <Sparkline tone={s.tone ?? 'primary'} />
+        {/* Middle: big value */}
+        <p className="mt-1.5 text-xl sm:text-2xl font-extrabold tracking-tight tabular-nums truncate text-white/90">
+          {s.value}
+        </p>
+
+        {/* Bottom: hint */}
+        <p className="mt-1.5 text-[10px] text-white/35 truncate">
+          {s.hint || "Live metric"}
+        </p>
       </div>
     </Comp>
   );
@@ -153,50 +199,22 @@ export function SummaryCards(p: Props) {
 
   const filtered = activeCat === "all" ? allStats : allStats.filter(s => s.cat === activeCat);
 
+  const tabCls = (active: boolean) => cn(
+    "px-3 py-1 text-xs font-semibold rounded-lg transition-all whitespace-nowrap",
+    active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+  );
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
         <div className="flex items-center gap-1.5 rounded-xl border border-border/60 bg-card/60 p-1 backdrop-blur-md">
-          <button
-            onClick={() => setActiveCat("all")}
-            className={cn(
-              "px-3 py-1 text-xs font-semibold rounded-lg transition-all",
-              activeCat === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-            )}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setActiveCat("money")}
-            className={cn(
-              "px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1",
-              activeCat === "money" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-            )}
-          >
-            💰 Money
-          </button>
-          <button
-            onClick={() => setActiveCat("stock")}
-            className={cn(
-              "px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1",
-              activeCat === "stock" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-            )}
-          >
-            📦 Stock
-          </button>
-          <button
-            onClick={() => setActiveCat("expenses")}
-            className={cn(
-              "px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1",
-              activeCat === "expenses" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-            )}
-          >
-            🔧 Expenses
-          </button>
+          <button onClick={() => setActiveCat("all")} className={tabCls(activeCat === "all")}>All</button>
+          <button onClick={() => setActiveCat("money")} className={tabCls(activeCat === "money")}>💰 Money</button>
+          <button onClick={() => setActiveCat("stock")} className={tabCls(activeCat === "stock")}>📦 Stock</button>
+          <button onClick={() => setActiveCat("expenses")} className={tabCls(activeCat === "expenses")}>🔧 Expenses</button>
         </div>
-
         <span className="text-xs font-medium text-muted-foreground whitespace-nowrap hidden sm:inline">
-          Showing {filtered.length} metrics
+          {filtered.length} metrics
         </span>
       </div>
 
