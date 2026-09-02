@@ -146,7 +146,6 @@ function supabase(method, urlPath, body) {
       hostname: SUPABASE_URL,
       path: `/rest/v1/${urlPath}`,
       method,
-      agent: keepAliveAgent,
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
@@ -155,15 +154,17 @@ function supabase(method, urlPath, body) {
         ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
       }
     };
+
+    let done = false;
+    const finish = (val) => { if (!done) { done = true; resolve(val); } };
+
     const req = https.request(opts, (res) => {
       let data = '';
       res.on('data', c => data += c);
-      res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(data); } });
+      res.on('end', () => { try { finish(JSON.parse(data)); } catch { finish([]); } });
     });
-    req.on('error', (e) => {
-      console.error('Supabase HTTP error:', e.message);
-      resolve([]);
-    });
+    req.setTimeout(4000, () => { req.destroy(); finish([]); });
+    req.on('error', (e) => { finish([]); });
     if (payload) req.write(payload);
     req.end();
   });
@@ -175,22 +176,23 @@ function fetchExt(urlPath) {
       hostname: EXT_URL,
       path: `/rest/v1/${urlPath}`,
       method: 'GET',
-      agent: keepAliveAgent,
       headers: {
         'apikey': EXT_KEY,
         'Authorization': `Bearer ${EXT_KEY}`,
         'Content-Type': 'application/json'
       }
     };
+
+    let done = false;
+    const finish = (val) => { if (!done) { done = true; resolve(val); } };
+
     const req = https.request(opts, (res) => {
       let data = '';
       res.on('data', c => data += c);
-      res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve([]); } });
+      res.on('end', () => { try { finish(JSON.parse(data)); } catch { finish([]); } });
     });
-    req.on('error', (e) => {
-      console.error('fetchExt HTTP error:', e.message);
-      resolve([]);
-    });
+    req.setTimeout(4000, () => { req.destroy(); finish([]); });
+    req.on('error', (e) => { finish([]); });
     req.end();
   });
 }
@@ -548,10 +550,10 @@ async function handleText(text, sender = 'default') {
   }
 
   // ── PETROL / DIESEL ──────────────────────────────────────────────────────
-  if (/petrol|diesel/.test(t)) return generatePetrolReport();
+  if (/petrol|diesel/.test(t)) return await generatePetrolReport();
 
   // ── OPERATOR / MAJURI ────────────────────────────────────────────────────
-  if (/operator|majuri/.test(t) && !/sells|sell|bikri/.test(t)) return generateOperatorReport();
+  if (/operator|majuri/.test(t) && !/sells|sell|bikri/.test(t)) return await generateOperatorReport();
 
   // ── MONTHLY SPECIFIC REPORT ──────────────────────────────────────────────
   const monthMap = {
@@ -584,12 +586,12 @@ async function handleText(text, sender = 'default') {
       const monthCode = `${year}-${monthNum}`;
       const monthNamesFull = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
       const monthLabel = `${monthNamesFull[parseInt(monthNum) - 1]} ${year}`;
-      return generateMonthlyReport(monthCode, monthLabel);
+      return await generateMonthlyReport(monthCode, monthLabel);
     }
   }
 
   // ── FULL REPORT / DASHBOARD ──────────────────────────────────────────────
-  if (/report|dashboard|dikhao|batao|bata|sari|summary|status|poora|pura|full/.test(t)) return generateReport();
+  if (/report|dashboard|dikhao|batao|bata|sari|summary|status|poora|pura|full/.test(t)) return await generateReport();
 
   // ── STOCK / MAAL ─────────────────────────────────────────────────────────
   if (/stock|bhandaar|inventory/.test(t) || (t === 'maal') || /kitna maal/.test(t)) {
