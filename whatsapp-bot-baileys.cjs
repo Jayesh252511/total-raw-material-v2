@@ -29,6 +29,16 @@ let botStatus = 'Starting...';
 
 // ─── HTTP DASHBOARD (Serves Scannable QR Image & Pairing Code) ──────────────
 http.createServer((req, res) => {
+  if (req.url === '/api/status') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      status: botStatus,
+      isLive: botStatus.includes('LIVE'),
+      pairingCode: currentPairingCode,
+      qrImage: currentQRCodeImage
+    }));
+  }
+
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(`
     <!DOCTYPE html>
@@ -36,39 +46,63 @@ http.createServer((req, res) => {
       <head>
         <title>WhatsApp Bot Dashboard</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta http-equiv="refresh" content="3">
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 1.5rem; background: #0f172a; color: #fff; text-align: center; }
           .card { background: #1e293b; padding: 2rem; border-radius: 1rem; max-width: 520px; margin: 1rem auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
-          .code { font-size: 2.8rem; letter-spacing: 6px; font-weight: 900; background: #2563eb; color: #ffffff; padding: 0.75rem 1.5rem; border-radius: 0.75rem; margin: 1rem 0; display: inline-block; box-shadow: 0 4px 20px rgba(37,99,235,0.5); }
+          .code { font-size: 2.6rem; letter-spacing: 5px; font-weight: 900; background: #2563eb; color: #ffffff; padding: 0.75rem 1.5rem; border-radius: 0.75rem; margin: 1rem 0; display: inline-block; box-shadow: 0 4px 20px rgba(37,99,235,0.5); }
           .status { font-size: 1.2rem; margin-bottom: 1rem; color: #38bdf8; font-weight: 600; }
           .qr-box { background: #ffffff; padding: 1.25rem; border-radius: 1rem; display: inline-block; margin: 1rem 0; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
-          .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; background: ${botStatus.includes('LIVE') ? '#10b981' : '#f59e0b'}; color: #fff; font-size: 0.85rem; font-weight: 600; }
+          .badge { display: inline-block; padding: 0.35rem 1rem; border-radius: 9999px; color: #fff; font-size: 0.9rem; font-weight: 700; transition: all 0.3s ease; }
+          .badge-live { background: #10b981; box-shadow: 0 0 12px rgba(16,185,129,0.4); }
+          .badge-warn { background: #f59e0b; }
         </style>
       </head>
       <body>
         <div class="card">
           <h1>🤖 WhatsApp Bot Dashboard</h1>
-          <div class="status">Status: <span class="badge">${botStatus}</span></div>
-
-          ${currentQRCodeImage ? `
-            <div class="qr-box">
-              <img src="${currentQRCodeImage}" alt="Scan QR Code" style="width:280px; height:280px; display:block;" />
-            </div>
-            <p style="color:#38bdf8; font-size:1.1rem; font-weight:bold; margin-top:0.25rem;">📷 Scan this QR Code with WhatsApp Camera!</p>
-          ` : ''}
-
-          ${currentPairingCode ? `
-            <div style="margin-top:1.25rem; border-top:1px solid #334155; padding-top:1rem;">
-              <p style="color:#94a3b8; font-size:1rem;">Or enter 8-Digit Pairing Code on phone:</p>
-              <div class="code">${currentPairingCode}</div>
-            </div>
-          ` : ''}
-
-          ${!currentQRCodeImage && !currentPairingCode ? `
-            <p style="color:#94a3b8;">${botStatus.includes('LIVE') ? '✅ Bot is connected and running 24/7!' : '⏳ Generating QR Code... Refreshing in 3s.'}</p>
-          ` : ''}
+          <div class="status">Status: <span id="statusBadge" class="badge badge-warn">Checking...</span></div>
+          <div id="contentArea"></div>
         </div>
+
+        <script>
+          let lastQr = null;
+          let lastCode = null;
+
+          async function updateStatus() {
+            try {
+              const res = await fetch('/api/status');
+              const data = await res.json();
+              const badge = document.getElementById('statusBadge');
+              const content = document.getElementById('contentArea');
+
+              badge.textContent = data.status;
+              badge.className = 'badge ' + (data.isLive ? 'badge-live' : 'badge-warn');
+
+              if (data.qrImage === lastQr && data.pairingCode === lastCode && Boolean(content.innerHTML)) return;
+              lastQr = data.qrImage;
+              lastCode = data.pairingCode;
+
+              let html = '';
+              if (data.qrImage) {
+                html += '<div class="qr-box"><img src="' + data.qrImage + '" style="width:280px; height:280px; display:block;" /></div>';
+                html += '<p style="color:#38bdf8; font-size:1.1rem; font-weight:bold; margin-top:0.5rem;">📷 Scan this QR Code with WhatsApp Camera!</p>';
+              }
+              if (data.pairingCode) {
+                html += '<div style="margin-top:1.25rem; border-top:1px solid #334155; padding-top:1rem;">';
+                html += '<p style="color:#94a3b8; font-size:1rem;">Or enter 8-Digit Pairing Code on phone:</p>';
+                html += '<div class="code">' + data.pairingCode + '</div></div>';
+              }
+              if (!data.qrImage && !data.pairingCode) {
+                html += '<p style="color:#94a3b8; font-size:1.1rem; margin-top:1rem;">' + 
+                  (data.isLive ? '✅ Bot is connected and running 24/7!' : '⏳ Connecting to WhatsApp... Please wait.') + 
+                  '</p>';
+              }
+              content.innerHTML = html;
+            } catch (e) {}
+          }
+          updateStatus();
+          setInterval(updateStatus, 2000);
+        </script>
       </body>
     </html>
   `);
@@ -1039,7 +1073,7 @@ async function forceSaveSessionToSupabase() {
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = code !== DisconnectReason.loggedOut;
-      botStatus = `Disconnected (${code})`;
+      botStatus = shouldReconnect ? 'Connecting to WhatsApp...' : 'Logged out (Pairing needed)';
       console.log('⚠️ Connection closed. Code:', code, '| Reconnecting:', shouldReconnect);
       // Clear periodic backup timer on disconnect
       if (sock._sessionSaveInterval) { clearInterval(sock._sessionSaveInterval); sock._sessionSaveInterval = null; }
