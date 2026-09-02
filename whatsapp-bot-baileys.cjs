@@ -788,7 +788,10 @@ async function saveSessionToSupabase() {
     const credsContent = fs.readFileSync(credsPath, 'utf8');
     try {
       const credsObj = JSON.parse(credsContent);
-      if (!credsObj.registered) return;
+      if (!credsObj.registered) {
+        console.log('⏭️ Session not registered yet — skipping DB save.');
+        return;
+      }
     } catch {
       return;
     }
@@ -802,10 +805,31 @@ async function saveSessionToSupabase() {
       }
     }
 
-    await supabase('POST', 'bot_session', {
-      id: 'session_snapshot',
-      data: sessionData
+    // ✅ UPSERT — use Prefer: resolution=merge-duplicates so if row exists it gets UPDATED
+    // The old POST was silently failing when session_snapshot already existed!
+    const payload = JSON.stringify({ id: 'session_snapshot', data: sessionData });
+    await new Promise((resolve, reject) => {
+      const opts = {
+        hostname: SUPABASE_URL,
+        path: '/rest/v1/bot_session',
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates,return=minimal',
+          'Content-Length': Buffer.byteLength(payload)
+        }
+      };
+      const req = https.request(opts, (res) => {
+        res.resume();
+        res.on('end', resolve);
+      });
+      req.on('error', reject);
+      req.write(payload);
+      req.end();
     });
+    console.log(`💾 Session UPSERTED to Supabase DB (${Object.keys(sessionData).length} files)`);
   } catch (e) {
     console.error('Session save error:', e?.message || e);
   }
@@ -884,14 +908,28 @@ async function startBot() {
       
       // Save active session state to Supabase DB immediately on connect
       await saveSessionToSupabase();
+
+      // ✅ Periodic session backup every 10 minutes while connected
+      // WhatsApp silently rotates keys — this ensures the saved session stays fresh
+      if (sock._sessionSaveInterval) clearInterval(sock._sessionSaveInterval);
+      sock._sessionSaveInterval = setInterval(async () => {
+        if (botStatus === 'LIVE & READY 24/7') {
+          await saveSessionToSupabase();
+          console.log('🔄 Periodic 10-min session backup done.');
+        }
+      }, 10 * 60 * 1000);
     }
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = code !== DisconnectReason.loggedOut;
       botStatus = `Disconnected (${code})`;
       console.log('⚠️ Connection closed. Code:', code, '| Reconnecting:', shouldReconnect);
+      // Clear periodic backup timer on disconnect
+      if (sock._sessionSaveInterval) { clearInterval(sock._sessionSaveInterval); sock._sessionSaveInterval = null; }
       if (shouldReconnect) {
-        setTimeout(startBot, code === 515 ? 1000 : 3000);
+        // ✅ Flush latest session to DB before reconnecting so restored state is fresh
+        await saveSessionToSupabase();
+        setTimeout(startBot, code === 515 ? 1000 : 5000);
       } else {
         console.log('❌ Session invalidated (Code 401). Clearing auth folder & DB session snapshot for fresh pairing...');
         try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch {}
