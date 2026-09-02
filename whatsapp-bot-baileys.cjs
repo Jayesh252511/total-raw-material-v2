@@ -140,7 +140,7 @@ const EXT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 
 // ─── SUPABASE ──────────────────────────────────────────────────────────────
 function supabase(method, urlPath, body) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const payload = body ? JSON.stringify(body) : null;
     const opts = {
       hostname: SUPABASE_URL,
@@ -160,18 +160,22 @@ function supabase(method, urlPath, body) {
       res.on('data', c => data += c);
       res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(data); } });
     });
-    req.on('error', reject);
+    req.on('error', (e) => {
+      console.error('Supabase HTTP error:', e.message);
+      resolve([]);
+    });
     if (payload) req.write(payload);
     req.end();
   });
 }
 
 function fetchExt(urlPath) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const opts = {
       hostname: EXT_URL,
       path: `/rest/v1/${urlPath}`,
       method: 'GET',
+      agent: keepAliveAgent,
       headers: {
         'apikey': EXT_KEY,
         'Authorization': `Bearer ${EXT_KEY}`,
@@ -181,9 +185,12 @@ function fetchExt(urlPath) {
     const req = https.request(opts, (res) => {
       let data = '';
       res.on('data', c => data += c);
-      res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(data); } });
+      res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve([]); } });
     });
-    req.on('error', reject);
+    req.on('error', (e) => {
+      console.error('fetchExt HTTP error:', e.message);
+      resolve([]);
+    });
     req.end();
   });
 }
@@ -411,6 +418,13 @@ let lastInserted = null;
 
 async function handleText(text, sender = 'default') {
   const t = text.toLowerCase().trim();
+
+  // ── 0. DIRECT REPORT MATCH ───────────────────────────────────────────────
+  if (/^report$|^summary$|^dashboard$/i.test(t) || /report|dashboard|dikhao|batao|bata|summary|status|poora|pura|full/.test(t)) {
+    if (!/petrol|operator|majuri|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(t)) {
+      return generateReport();
+    }
+  }
 
   // ── 0. WIZARD SESSION STEP-BY-STEP HANDLER ──────────────────────────────
   if (wizardSessions.has(sender)) {
