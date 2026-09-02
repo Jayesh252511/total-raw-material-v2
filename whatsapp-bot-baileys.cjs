@@ -741,99 +741,168 @@ async function handleText(text, sender = 'default') {
   return `🤖 *Samajh nahi aaya!*\n"_${text.slice(0, 40)}_"\n\nYeh commands try karo:\n• *sell entry add* — Add sell bill\n• *report* — Full data\n• *petrol* — Petrol details\n• *stock* — Maal balance\n• *balance* — Cash balance\n• *delete [name]* — Delete entry\n\n📸 _PhonePe screenshot bhejo for auto-entry_`;
 }
 
-// ─── SUPABASE SESSION SNAPSHOT (Survives Render Cloud Restarts & Sleep) ────
-async function restoreSessionFromSupabase() {
-  try {
-    const res = await supabase('GET', 'bot_session?id=eq.session_snapshot');
-    if (Array.isArray(res) && res.length > 0 && res[0].data) {
-      const files = res[0].data;
 
-      // Verify creds.json exists and registered === true
-      if (files['creds.json']) {
-        try {
-          const creds = JSON.parse(files['creds.json']);
-          if (!creds.registered) {
-            console.log('⚠️ Saved DB session snapshot is not registered yet. Clearing...');
-            await supabase('DELETE', 'bot_session?id=eq.session_snapshot');
-            return false;
-          }
-        } catch {}
-      }
+// ─── PER-FILE SUPABASE AUTH PERSISTENCE ────────────────────────────────────
+// Stores each baileys_auth file as its own row with key = filename.
+// Uses bot_auth_files table with TEXT PRIMARY KEY so every UPSERT is reliable.
 
-      if (!fs.existsSync(AUTH_FOLDER)) fs.mkdirSync(AUTH_FOLDER, { recursive: true });
-      let count = 0;
-      for (const fileName in files) {
-        const filePath = path.join(AUTH_FOLDER, fileName);
-        fs.writeFileSync(filePath, files[fileName], 'utf8');
-        count++;
+async function upsertAuthFile(key, content) {
+  const payload = JSON.stringify({ key, content, updated_at: new Date().toISOString() });
+  return new Promise((resolve) => {
+    const body = Buffer.from(payload);
+    const opts = {
+      hostname: SUPABASE_URL,
+      path: '/rest/v1/bot_auth_files',
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal',
+        'Content-Length': body.length
       }
-      if (count > 0) {
-        console.log(`✅ Restored ${count} registered WhatsApp session files from Supabase DB!`);
-        return true;
-      }
-    }
-  } catch (e) {
-    console.error('Session restore error:', e?.message || e);
-  }
-  return false;
+    };
+    const req = https.request(opts, (res) => { res.resume(); res.on('end', resolve); });
+    req.on('error', (e) => { console.error('upsertAuthFile error:', e.message); resolve(); });
+    req.write(body);
+    req.end();
+  });
 }
 
-async function saveSessionToSupabase() {
-  try {
-    if (!fs.existsSync(AUTH_FOLDER)) return;
-    const credsPath = path.join(AUTH_FOLDER, 'creds.json');
-    if (!fs.existsSync(credsPath)) return;
+async function deleteAuthFile(key) {
+  return new Promise((resolve) => {
+    const opts = {
+      hostname: SUPABASE_URL,
+      path: `/rest/v1/bot_auth_files?key=eq.${encodeURIComponent(key)}`,
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    };
+    const req = https.request(opts, (res) => { res.resume(); res.on('end', resolve); });
+    req.on('error', resolve);
+    req.end();
+  });
+}
 
-    // ONLY save to DB if registered === true
-    const credsContent = fs.readFileSync(credsPath, 'utf8');
+async function loadAllAuthFiles() {
+  return new Promise((resolve) => {
+    const opts = {
+      hostname: SUPABASE_URL,
+      path: '/rest/v1/bot_auth_files?select=key,content',
+      method: 'GET',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Accept': 'application/json'
+      }
+    };
+    const req = https.request(opts, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch { resolve([]); }
+      });
+    });
+    req.on('error', () => resolve([]));
+    req.end();
+  });
+}
+
+// Debounce timer for saves — prevents race conditions when many creds.update fire rapidly
+let _savePending = null;
+
+async function saveSessionToSupabase() {
+  // Clear any queued save — this replaces it with a fresh one
+  if (_savePending) { clearTimeout(_savePending); }
+
+  _savePending = setTimeout(async () => {
+    _savePending = null;
     try {
-      const credsObj = JSON.parse(credsContent);
+      if (!fs.existsSync(AUTH_FOLDER)) return;
+      const credsPath = path.join(AUTH_FOLDER, 'creds.json');
+      if (!fs.existsSync(credsPath)) return;
+
+      // Only save registered sessions
+      const credsObj = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
       if (!credsObj.registered) {
         console.log('⏭️ Session not registered yet — skipping DB save.');
         return;
       }
-    } catch {
-      return;
+
+      const fileNames = fs.readdirSync(AUTH_FOLDER);
+      const tasks = fileNames
+        .filter(f => fs.statSync(path.join(AUTH_FOLDER, f)).isFile())
+        .map(f => upsertAuthFile(f, fs.readFileSync(path.join(AUTH_FOLDER, f), 'utf8')));
+
+      await Promise.all(tasks);
+      console.log(`💾 Session saved: ${tasks.length} files → Supabase bot_auth_files`);
+    } catch (e) {
+      console.error('Session save error:', e?.message || e);
+    }
+  }, 1500); // 1.5 second debounce — batches rapid creds.update events
+}
+
+async function restoreSessionFromSupabase() {
+  try {
+    const rows = await loadAllAuthFiles();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      console.log('ℹ️ No session files found in Supabase bot_auth_files.');
+      return false;
     }
 
-    const fileNames = fs.readdirSync(AUTH_FOLDER);
-    const sessionData = {};
-    for (const file of fileNames) {
-      const filePath = path.join(AUTH_FOLDER, file);
-      if (fs.statSync(filePath).isFile()) {
-        sessionData[file] = fs.readFileSync(filePath, 'utf8');
+    // Must have creds.json with registered=true
+    const credsRow = rows.find(r => r.key === 'creds.json');
+    if (!credsRow) {
+      console.log('ℹ️ creds.json not found in Supabase — fresh login needed.');
+      return false;
+    }
+    try {
+      const creds = JSON.parse(credsRow.content);
+      if (!creds.registered) {
+        console.log('⚠️ Supabase creds not registered yet — skipping restore.');
+        return false;
+      }
+    } catch {
+      console.log('⚠️ creds.json is corrupt in Supabase — clearing and starting fresh.');
+      // Delete all stale/corrupt auth files
+      await Promise.all(rows.map(r => deleteAuthFile(r.key)));
+      return false;
+    }
+
+    // Write all files back to disk
+    if (!fs.existsSync(AUTH_FOLDER)) fs.mkdirSync(AUTH_FOLDER, { recursive: true });
+    for (const { key, content } of rows) {
+      try {
+        fs.writeFileSync(path.join(AUTH_FOLDER, key), content, 'utf8');
+      } catch (e) {
+        console.error(`Failed writing auth file ${key}:`, e.message);
       }
     }
-
-    // ✅ UPSERT — use Prefer: resolution=merge-duplicates so if row exists it gets UPDATED
-    // The old POST was silently failing when session_snapshot already existed!
-    const payload = JSON.stringify({ id: 'session_snapshot', data: sessionData });
-    await new Promise((resolve, reject) => {
-      const opts = {
-        hostname: SUPABASE_URL,
-        path: '/rest/v1/bot_session',
-        method: 'POST',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates,return=minimal',
-          'Content-Length': Buffer.byteLength(payload)
-        }
-      };
-      const req = https.request(opts, (res) => {
-        res.resume();
-        res.on('end', resolve);
-      });
-      req.on('error', reject);
-      req.write(payload);
-      req.end();
-    });
-    console.log(`💾 Session UPSERTED to Supabase DB (${Object.keys(sessionData).length} files)`);
+    console.log(`✅ Restored ${rows.length} WhatsApp session files from Supabase!`);
+    return true;
   } catch (e) {
-    console.error('Session save error:', e?.message || e);
+    console.error('Session restore error:', e?.message || e);
+    return false;
   }
 }
+
+async function clearSessionFromSupabase() {
+  try {
+    const rows = await loadAllAuthFiles();
+    if (Array.isArray(rows) && rows.length > 0) {
+      await Promise.all(rows.map(r => deleteAuthFile(r.key)));
+      console.log('🗑️ Cleared all session files from Supabase bot_auth_files.');
+    }
+  } catch (e) {
+    console.error('Session clear error:', e?.message || e);
+  }
+}
+
+
 
 let currentSock = null;
 
@@ -927,13 +996,14 @@ async function startBot() {
       // Clear periodic backup timer on disconnect
       if (sock._sessionSaveInterval) { clearInterval(sock._sessionSaveInterval); sock._sessionSaveInterval = null; }
       if (shouldReconnect) {
-        // ✅ Flush latest session to DB before reconnecting so restored state is fresh
+        // Flush latest session before reconnecting
         await saveSessionToSupabase();
         setTimeout(startBot, code === 515 ? 1000 : 5000);
       } else {
-        console.log('❌ Session invalidated (Code 401). Clearing auth folder & DB session snapshot for fresh pairing...');
+        // Code 401 = WhatsApp explicitly logged out this device
+        console.log('❌ Session invalidated (Code 401). Clearing local folder & Supabase for fresh pairing...');
         try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch {}
-        try { await supabase('DELETE', 'bot_session?id=eq.session_snapshot'); } catch {}
+        await clearSessionFromSupabase();
         currentPairingCode = null;
         currentQRCodeImage = null;
         setTimeout(startBot, 2000);
