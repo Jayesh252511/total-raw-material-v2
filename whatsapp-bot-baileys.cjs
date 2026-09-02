@@ -12,6 +12,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 10, timeout: 30000 });
+
 // ─── CONFIG ────────────────────────────────────────────────────────────────
 const PHONE_NUMBER   = process.env.PHONE_NUMBER || '918605601801';
 const PORT           = process.env.PORT || 3000;
@@ -144,6 +146,7 @@ function supabase(method, urlPath, body) {
       hostname: SUPABASE_URL,
       path: `/rest/v1/${urlPath}`,
       method,
+      agent: keepAliveAgent,
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
@@ -804,6 +807,7 @@ async function upsertAuthFile(key, content) {
       hostname: SUPABASE_URL,
       path: '/rest/v1/bot_auth_files',
       method: 'POST',
+      agent: keepAliveAgent,
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
@@ -825,6 +829,7 @@ async function deleteAuthFile(key) {
       hostname: SUPABASE_URL,
       path: `/rest/v1/bot_auth_files?key=eq.${encodeURIComponent(key)}`,
       method: 'DELETE',
+      agent: keepAliveAgent,
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
@@ -843,6 +848,7 @@ async function loadAllAuthFiles() {
       hostname: SUPABASE_URL,
       path: '/rest/v1/bot_auth_files?select=key,content',
       method: 'GET',
+      agent: keepAliveAgent,
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
