@@ -1174,6 +1174,8 @@ async function forceSaveSessionToSupabase() {
     return null;
   }
 
+  let targetGroupJid = null;
+
   // Messages
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     for (const msg of messages) {
@@ -1181,18 +1183,20 @@ async function forceSaveSessionToSupabase() {
         if (!msg.key.remoteJid) continue;
 
         const jid = msg.key.remoteJid;
-        const isGroup = jid.endsWith('@g.us');
-        let subject = null;
 
-        if (isGroup) {
-          subject = await getGroupSubject(jid);
-          const normSub = (subject || '').toLowerCase().trim();
-          const normTarget = TARGET_GROUP.toLowerCase().trim();
-          const isMatch = !subject || normSub === normTarget || normSub.includes('total raw material') || normSub.includes('bot total');
-          if (!isMatch) {
-            console.log(`⏭️ Skipping group "${subject}" (does not match target "${TARGET_GROUP}")`);
-            continue;
+        // 1. STRICTLY IGNORE ALL DIRECT MESSAGES / PERSONAL CHATS
+        if (!jid.endsWith('@g.us')) continue;
+
+        // 2. STRICTLY IGNORE ALL OTHER GROUPS
+        if (targetGroupJid && jid !== targetGroupJid) continue;
+
+        if (!targetGroupJid) {
+          const subject = await getGroupSubject(jid);
+          if (!subject || subject.trim().toLowerCase() !== TARGET_GROUP.trim().toLowerCase()) {
+            continue; // Not "Bot total raw material"
           }
+          targetGroupJid = jid;
+          console.log(`🎯 LOCKED TARGET GROUP JID: ${jid} ("${TARGET_GROUP}")`);
         }
 
         const msgContent = msg.message;
@@ -1208,7 +1212,7 @@ async function forceSaveSessionToSupabase() {
           continue;
         }
 
-        console.log(`📩 RECEIVED [${isGroup ? 'GROUP: ' + (subject || jid) : 'DM'}] | text: "${textContent}" | fromMe: ${msg.key.fromMe}`);
+        console.log(`📩 GROUP MSG ["${TARGET_GROUP}"] | text: "${textContent}" | fromMe: ${msg.key.fromMe}`);
 
         // Image PhonePe
         const actualImg = extractImageMessage(msgContent);
