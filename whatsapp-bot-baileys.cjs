@@ -826,24 +826,51 @@ async function saveSessionToSupabase() {
       const credsPath = path.join(AUTH_FOLDER, 'creds.json');
       if (!fs.existsSync(credsPath)) return;
 
-      // Only save registered sessions
-      const credsObj = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
-      if (!credsObj.registered) {
+      // Safely read & parse creds.json (handles mid-write 0-byte reads gracefully)
+      let credsObj = null;
+      try {
+        const raw = fs.readFileSync(credsPath, 'utf8');
+        if (raw && raw.trim()) {
+          credsObj = JSON.parse(raw);
+        }
+      } catch (e) {
+        // File was being written — retry in 500ms
+        console.log('⏳ creds.json mid-write detected, retrying save in 500ms...');
+        setTimeout(saveSessionToSupabase, 500);
+        return;
+      }
+
+      // Valid session if registered === true OR me object exists OR socket is connected
+      const isRegistered = Boolean(
+        credsObj?.registered ||
+        credsObj?.me ||
+        (currentSock && (currentSock.authState?.creds?.registered || currentSock.authState?.creds?.me)) ||
+        botStatus === 'LIVE & READY 24/7'
+      );
+
+      if (!isRegistered) {
         console.log('⏭️ Session not registered yet — skipping DB save.');
         return;
       }
 
       const fileNames = fs.readdirSync(AUTH_FOLDER);
       const tasks = fileNames
-        .filter(f => fs.statSync(path.join(AUTH_FOLDER, f)).isFile())
-        .map(f => upsertAuthFile(f, fs.readFileSync(path.join(AUTH_FOLDER, f), 'utf8')));
+        .filter(f => {
+          try { return fs.statSync(path.join(AUTH_FOLDER, f)).isFile(); } catch { return false; }
+        })
+        .map(f => {
+          try {
+            const content = fs.readFileSync(path.join(AUTH_FOLDER, f), 'utf8');
+            return upsertAuthFile(f, content);
+          } catch { return Promise.resolve(); }
+        });
 
       await Promise.all(tasks);
-      console.log(`💾 Session saved: ${tasks.length} files → Supabase bot_auth_files`);
+      console.log(`💾 Session saved: ${tasks.length} auth files → Supabase bot_auth_files`);
     } catch (e) {
       console.error('Session save error:', e?.message || e);
     }
-  }, 1500); // 1.5 second debounce — batches rapid creds.update events
+  }, 1000); // 1-second debounce
 }
 
 async function restoreSessionFromSupabase() {
@@ -854,7 +881,7 @@ async function restoreSessionFromSupabase() {
       return false;
     }
 
-    // Must have creds.json with registered=true
+    // Must have creds.json with registered=true OR me user object
     const credsRow = rows.find(r => r.key === 'creds.json');
     if (!credsRow) {
       console.log('ℹ️ creds.json not found in Supabase — fresh login needed.');
@@ -862,13 +889,13 @@ async function restoreSessionFromSupabase() {
     }
     try {
       const creds = JSON.parse(credsRow.content);
-      if (!creds.registered) {
-        console.log('⚠️ Supabase creds not registered yet — skipping restore.');
+      const isRegistered = Boolean(creds?.registered || creds?.me);
+      if (!isRegistered) {
+        console.log('⚠️ Supabase creds not registered — skipping restore.');
         return false;
       }
     } catch {
       console.log('⚠️ creds.json is corrupt in Supabase — clearing and starting fresh.');
-      // Delete all stale/corrupt auth files
       await Promise.all(rows.map(r => deleteAuthFile(r.key)));
       return false;
     }
@@ -958,6 +985,28 @@ async function startBot() {
     }, 3000);
   }
 
+async function forceSaveSessionToSupabase() {
+  try {
+    if (!fs.existsSync(AUTH_FOLDER)) return;
+    const fileNames = fs.readdirSync(AUTH_FOLDER);
+    const tasks = fileNames
+      .filter(f => {
+        try { return fs.statSync(path.join(AUTH_FOLDER, f)).isFile(); } catch { return false; }
+      })
+      .map(f => {
+        try {
+          const content = fs.readFileSync(path.join(AUTH_FOLDER, f), 'utf8');
+          return upsertAuthFile(f, content);
+        } catch { return Promise.resolve(); }
+      });
+
+    await Promise.all(tasks);
+    console.log(`🚀 FORCE-SAVED SESSION: ${tasks.length} files saved to Supabase DB!`);
+  } catch (e) {
+    console.error('Force save error:', e?.message || e);
+  }
+}
+
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
       try {
@@ -975,15 +1024,14 @@ async function startBot() {
       console.log(`✅ Listening to group: "${TARGET_GROUP}"`);
       console.log('✅ Forward any PhonePe screenshot to the group to add expenses.\n');
       
-      // Save active session state to Supabase DB immediately on connect
-      await saveSessionToSupabase();
+      // Force save active session state to Supabase DB immediately on connect
+      await forceSaveSessionToSupabase();
 
       // ✅ Periodic session backup every 10 minutes while connected
-      // WhatsApp silently rotates keys — this ensures the saved session stays fresh
       if (sock._sessionSaveInterval) clearInterval(sock._sessionSaveInterval);
       sock._sessionSaveInterval = setInterval(async () => {
         if (botStatus === 'LIVE & READY 24/7') {
-          await saveSessionToSupabase();
+          await forceSaveSessionToSupabase();
           console.log('🔄 Periodic 10-min session backup done.');
         }
       }, 10 * 60 * 1000);
@@ -997,7 +1045,7 @@ async function startBot() {
       if (sock._sessionSaveInterval) { clearInterval(sock._sessionSaveInterval); sock._sessionSaveInterval = null; }
       if (shouldReconnect) {
         // Flush latest session before reconnecting
-        await saveSessionToSupabase();
+        await forceSaveSessionToSupabase();
         setTimeout(startBot, code === 515 ? 1000 : 5000);
       } else {
         // Code 401 = WhatsApp explicitly logged out this device
