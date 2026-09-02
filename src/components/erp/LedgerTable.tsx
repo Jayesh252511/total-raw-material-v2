@@ -385,28 +385,28 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
 
       {/* Desktop table */}
       <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-soft md:block">
-        <table className="w-full text-sm min-w-[1450px]">
-          <thead className="bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
+        <table className="w-full text-sm" style={{ minWidth: isSell ? "1520px" : "860px" }}>
+          <thead className="bg-muted/50 text-[11px] uppercase tracking-wider text-muted-foreground border-b border-border">
             <tr>
-              <th className="px-3 py-2.5 text-left font-medium w-20">Pc No.</th>
-              <th className="px-3 py-2.5 text-left font-medium w-32">Date</th>
-              <th className="px-3 py-2.5 text-left font-medium min-w-[150px]">Name</th>
-              <th className="px-3 py-2.5 text-right font-medium w-28">Qty</th>
-              <th className="px-3 py-2.5 text-right font-medium w-24">Rate</th>
-              {isSell && <th className="px-3 py-2.5 text-right font-medium w-32">Total (w/o GST)</th>}
-              {isSell && <th className="px-3 py-2.5 text-right font-medium w-28">Gadi Bhada</th>}
-              {isSell && <th className="px-3 py-2.5 text-right font-medium w-24">GST (₹)</th>}
-              <th className="px-3 py-2.5 text-right font-medium w-36">Total Amount{isSell ? " (GST)" : ""}</th>
-              {isSell && <th className="px-3 py-2.5 text-right font-medium w-36">Amt w/o GB (w/o GST)</th>}
-              {isSell && <th className="px-3 py-2.5 text-right font-medium w-36">Amt w/o GB (GST)</th>}
-              <th className="px-3 py-2.5 text-right font-medium w-32">Payment</th>
-              <th className="px-3 py-2.5 text-right font-medium w-32">Manual Amt</th>
-              <th className="px-3 py-2.5 text-right font-medium w-32">Difference</th>
+              <th className="sticky left-0 z-20 bg-muted/50 px-3 py-3 text-left font-semibold w-[72px] border-r border-border/50">Pc#</th>
+              <th className="sticky left-[72px] z-20 bg-muted/50 px-3 py-3 text-left font-semibold w-[100px] border-r border-border/50">Date</th>
+              <th className="sticky left-[172px] z-20 bg-muted/50 px-3 py-3 text-left font-semibold min-w-[160px] border-r border-border/50">Name</th>
+              <th className="px-3 py-3 text-right font-semibold w-[90px]">Qty (t)</th>
+              <th className="px-3 py-3 text-right font-semibold w-[80px]">Rate</th>
+              {isSell && <th className="px-3 py-3 text-right font-semibold w-[120px]">Amt (no GST)</th>}
+              {isSell && <th className="px-3 py-3 text-right font-semibold w-[110px]">Gadi Bhada</th>}
+              {isSell && <th className="px-3 py-3 text-right font-semibold w-[100px]">GST (₹)</th>}
+              <th className="px-3 py-3 text-right font-semibold w-[130px]">Total{isSell ? " (+GST)" : ""}</th>
+              {isSell && <th className="px-3 py-3 text-right font-semibold w-[130px]">w/o GB (no GST)</th>}
+              {isSell && <th className="px-3 py-3 text-right font-semibold w-[130px]">w/o GB (+GST)</th>}
+              <th className="px-3 py-3 text-right font-semibold w-[120px]">Payment</th>
+              <th className="px-3 py-3 text-right font-semibold w-[110px]">Manual Amt</th>
+              <th className="px-3 py-3 text-right font-semibold w-[120px]">Difference</th>
               {!readOnly && <th className="w-12"></th>}
             </tr>
           </thead>
-          <tbody>
-            {filtered.length === 0 && <tr><td colSpan={isSell ? 14 : 8} className="py-10 text-center text-sm text-muted-foreground">No entries yet.</td></tr>}
+          <tbody className="divide-y divide-border/60">
+            {filtered.length === 0 && <tr><td colSpan={isSell ? 14 : 8} className="py-14 text-center text-sm text-muted-foreground">No entries yet. Add one above.</td></tr>}
             {filtered.map((r) => {
               const baseAmt = (Number(r.quantity) || 0) * (Number(r.rate) || 0);
               const gstAmt = isSell ? baseAmt * SELL_GST_RATE : 0;
@@ -415,63 +415,104 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
               const without = displayWithoutGB(r);
               const diff = isSell ? Number(r.payment) - without : total - Number(r.payment);
               return (
-                <tr key={r.id} className="border-t hover:bg-muted/20">
-                  <td className="px-1 py-1"><input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input text-left tabular-nums" /></td>
-                  <td className="px-1 py-1">
-                    <div className="relative w-full flex items-center px-2 min-h-[36px]">
-                      <span className="text-xs tabular-nums text-primary font-medium pointer-events-none">{formatDate(r.entry_date)}</span>
+                <tr key={r.id} className="group hover:bg-muted/25 transition-colors">
+                  {/* PC# — sticky */}
+                  <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/25 transition-colors px-3 py-2.5 border-r border-border/50">
+                    <input
+                      disabled={readOnly}
+                      type="number"
+                      defaultValue={r.serial_number}
+                      onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)}
+                      className="cell-input text-center tabular-nums font-semibold text-primary w-14"
+                    />
+                  </td>
+                  {/* Date — sticky */}
+                  <td className="sticky left-[72px] z-10 bg-card group-hover:bg-muted/25 transition-colors px-3 py-2.5 border-r border-border/50">
+                    <div className="relative flex items-center">
+                      <span className="text-sm tabular-nums font-semibold text-foreground whitespace-nowrap">{formatDate(r.entry_date)}</span>
                       {!readOnly && (
-                        <input 
-                          type="date" 
-                          defaultValue={r.entry_date} 
-                          onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} 
-                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+                        <input
+                          type="date"
+                          defaultValue={r.entry_date}
+                          onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                         />
                       )}
                     </div>
                   </td>
-                  <td className="px-1 py-1">
-                    <div className="flex items-center gap-1.5 px-1">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase">
-                        {getInitials(r.name)}
-                      </div>
-                      <input disabled={readOnly} defaultValue={r.name} onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" />
-                    </div>
+                  {/* Name — sticky */}
+                  <td className="sticky left-[172px] z-10 bg-card group-hover:bg-muted/25 transition-colors px-3 py-2.5 border-r border-border/50 min-w-[160px]">
+                    <input
+                      disabled={readOnly}
+                      defaultValue={r.name}
+                      onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)}
+                      className="cell-input text-sm font-medium w-full"
+                      placeholder="Name..."
+                    />
                   </td>
-                  <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.001" defaultValue={r.quantity} onBlur={(e) => Number(e.target.value) !== Number(r.quantity) && updateField(r, "quantity", e.target.value)} className="cell-input text-right tabular-nums" /></td>
-                  <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.rate} onBlur={(e) => Number(e.target.value) !== Number(r.rate) && updateField(r, "rate", e.target.value)} className="cell-input text-right tabular-nums" /></td>
-                  {isSell && <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{fmtNum(baseAmt, 2)}</td>}
-                  {isSell && <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.gadi_bhada || 0} onBlur={(e) => Number(e.target.value) !== Number(r.gadi_bhada || 0) && updateField(r, "gadi_bhada", e.target.value)} className="cell-input text-right tabular-nums" /></td>}
-                  {isSell && <td className="px-3 py-2 text-right tabular-nums text-orange-600 dark:text-orange-400">{fmtNum(gstAmt, 2)}</td>}
-                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtNum(total, 2)}</td>
-                  {isSell && <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{fmtNum(withoutGBNoGST, 2)}</td>}
-                  {isSell && <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtNum(without, 2)}</td>}
-                  <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.payment} onBlur={(e) => Number(e.target.value) !== Number(r.payment) && updateField(r, "payment", e.target.value)} className="cell-input text-right tabular-nums" /></td>
-                  <td className="px-1 py-1"><input disabled={readOnly} type="number" step="0.01" defaultValue={r.manual_amount || 0} onBlur={(e) => Number(e.target.value) !== Number(r.manual_amount || 0) && updateField(r, "manual_amount", e.target.value)} className="cell-input text-right tabular-nums" /></td>
-                  <td className={`px-3 py-2 text-right font-semibold tabular-nums ${diff === 0 ? "" : diff > 0 ? "text-destructive" : "text-amber-600"}`}>{fmtNum(diff, 2)}</td>
-                  {!readOnly && <td className="px-2 py-1"><button onClick={() => deleteRow(r)} className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button></td>}
+                  {/* Qty */}
+                  <td className="px-3 py-2.5 text-right">
+                    <input disabled={readOnly} type="number" step="0.001" defaultValue={r.quantity} onBlur={(e) => Number(e.target.value) !== Number(r.quantity) && updateField(r, "quantity", e.target.value)} className="cell-input text-right tabular-nums w-20" />
+                  </td>
+                  {/* Rate */}
+                  <td className="px-3 py-2.5 text-right">
+                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.rate} onBlur={(e) => Number(e.target.value) !== Number(r.rate) && updateField(r, "rate", e.target.value)} className="cell-input text-right tabular-nums w-20" />
+                  </td>
+                  {/* Amt (no GST) - calculated display */}
+                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm text-muted-foreground">{fmtNum(baseAmt, 0)}</td>}
+                  {/* Gadi Bhada */}
+                  {isSell && (
+                    <td className="px-3 py-2.5 text-right">
+                      <input disabled={readOnly} type="number" step="0.01" defaultValue={r.gadi_bhada || 0} onBlur={(e) => Number(e.target.value) !== Number(r.gadi_bhada || 0) && updateField(r, "gadi_bhada", e.target.value)} className="cell-input text-right tabular-nums w-24" />
+                    </td>
+                  )}
+                  {/* GST amt */}
+                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm text-orange-500 dark:text-orange-400">{fmtNum(gstAmt, 0)}</td>}
+                  {/* Total */}
+                  <td className="px-3 py-2.5 text-right tabular-nums text-sm font-semibold text-foreground">{fmtNum(total, 0)}</td>
+                  {/* w/o GB no GST */}
+                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm text-muted-foreground">{fmtNum(withoutGBNoGST, 0)}</td>}
+                  {/* w/o GB + GST */}
+                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm font-semibold">{fmtNum(without, 0)}</td>}
+                  {/* Payment */}
+                  <td className="px-3 py-2.5 text-right">
+                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.payment} onBlur={(e) => Number(e.target.value) !== Number(r.payment) && updateField(r, "payment", e.target.value)} className="cell-input text-right tabular-nums text-emerald-600 dark:text-emerald-400 font-semibold w-24" />
+                  </td>
+                  {/* Manual Amt */}
+                  <td className="px-3 py-2.5 text-right">
+                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.manual_amount || 0} onBlur={(e) => Number(e.target.value) !== Number(r.manual_amount || 0) && updateField(r, "manual_amount", e.target.value)} className="cell-input text-right tabular-nums w-24" />
+                  </td>
+                  {/* Difference */}
+                  <td className={`px-3 py-2.5 text-right tabular-nums text-sm font-bold ${
+                    diff === 0 ? "text-emerald-600 dark:text-emerald-400" : diff > 0 ? "text-destructive" : "text-amber-500"
+                  }`}>{fmtNum(diff, 0)}</td>
+                  {!readOnly && (
+                    <td className="px-2 py-2.5 text-center">
+                      <button onClick={() => deleteRow(r)} className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
           </tbody>
           <tfoot>
-            <tr className="border-t bg-muted/40 font-bold text-xs">
-              <td className="px-3 py-3 font-semibold text-muted-foreground" colSpan={3}>Sheet Totals ({filtered.length} entries)</td>
+            <tr className="border-t-2 border-border bg-muted/50 text-xs font-bold">
+              <td className="sticky left-0 z-10 bg-muted/50 px-3 py-3 font-bold text-foreground border-r border-border/50" colSpan={3}>TOTALS — {filtered.length} entries</td>
               <td className="px-3 py-3 text-right tabular-nums text-blue-600 dark:text-blue-400">{fmtNum(totalQty, 3)} t</td>
               <td className="px-3 py-3"></td>
-              {isSell && <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(totalBaseAmount, 2)}</td>}
-              {isSell && <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{fmtINR(totalGadiBhada)}</td>}
-              {isSell && <td className="px-3 py-3 text-right tabular-nums text-orange-600 dark:text-orange-400">{fmtNum(totalGSTAmount, 2)}</td>}
-              <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalAmount, 2)}</td>
-              {isSell && <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(totalWithoutGBNoGST, 2)}</td>}
-              {isSell && <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalWithoutGB, 2)}</td>}
-              <td className="px-3 py-3 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{fmtNum(totalPayment, 2)}</td>
-              <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalManualAmount, 2)}</td>
+              {isSell && <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(totalBaseAmount, 0)}</td>}
+              {isSell && <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(totalGadiBhada, 0)}</td>}
+              {isSell && <td className="px-3 py-3 text-right tabular-nums text-orange-500">{fmtNum(totalGSTAmount, 0)}</td>}
+              <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalAmount, 0)}</td>
+              {isSell && <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(totalWithoutGBNoGST, 0)}</td>}
+              {isSell && <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalWithoutGB, 0)}</td>}
+              <td className="px-3 py-3 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{fmtNum(totalPayment, 0)}</td>
+              <td className="px-3 py-3 text-right tabular-nums text-primary">{fmtNum(totalManualAmount, 0)}</td>
               <td className={`px-3 py-3 text-right tabular-nums ${
-                totalDifference === 0 ? "text-emerald-600 dark:text-emerald-400" : totalDifference > 0 ? "text-destructive" : "text-amber-600"
-              }`}>
-                {fmtNum(totalDifference, 2)}
-              </td>
+                totalDifference === 0 ? "text-emerald-600 dark:text-emerald-400" : totalDifference > 0 ? "text-destructive" : "text-amber-500"
+              }`}>{fmtNum(totalDifference, 0)}</td>
               {!readOnly && <td></td>}
             </tr>
           </tfoot>
