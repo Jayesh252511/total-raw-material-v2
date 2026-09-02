@@ -896,16 +896,11 @@ async function saveSessionToSupabase() {
         return;
       }
 
-      // Valid session if registered === true OR me object exists OR socket is connected
-      const isRegistered = Boolean(
-        credsObj?.registered ||
-        credsObj?.me ||
-        (currentSock && (currentSock.authState?.creds?.registered || currentSock.authState?.creds?.me)) ||
-        botStatus === 'LIVE & READY 24/7'
-      );
+      // Valid session ONLY if creds.me exists (logged in user object) or bot is LIVE
+      const isLoggedIn = Boolean(credsObj?.me || (currentSock && currentSock.authState?.creds?.me) || botStatus === 'LIVE & READY 24/7');
 
-      if (!isRegistered) {
-        console.log('⏭️ Session not registered yet — skipping DB save.');
+      if (!isLoggedIn) {
+        console.log('⏭️ Session not logged in yet (no creds.me) — skipping DB save.');
         return;
       }
 
@@ -937,7 +932,7 @@ async function restoreSessionFromSupabase() {
       return false;
     }
 
-    // Must have creds.json with registered=true OR me user object
+    // Must have creds.json with logged-in user object (creds.me)
     const credsRow = rows.find(r => r.key === 'creds.json');
     if (!credsRow) {
       console.log('ℹ️ creds.json not found in Supabase — fresh login needed.');
@@ -945,9 +940,8 @@ async function restoreSessionFromSupabase() {
     }
     try {
       const creds = JSON.parse(credsRow.content);
-      const isRegistered = Boolean(creds?.registered || creds?.me);
-      if (!isRegistered) {
-        console.log('⚠️ Supabase creds not registered — skipping restore.');
+      if (!creds?.me) {
+        console.log('⚠️ Supabase creds has no logged-in user (creds.me) — skipping restore for fresh login.');
         return false;
       }
     } catch {
@@ -1044,6 +1038,17 @@ async function startBot() {
 async function forceSaveSessionToSupabase() {
   try {
     if (!fs.existsSync(AUTH_FOLDER)) return;
+    const credsPath = path.join(AUTH_FOLDER, 'creds.json');
+    if (fs.existsSync(credsPath)) {
+      try {
+        const credsObj = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+        if (!credsObj?.me && botStatus !== 'LIVE & READY 24/7') {
+          console.log('⏭️ Skipping forceSave: user not logged in yet (no creds.me).');
+          return;
+        }
+      } catch {}
+    }
+
     const fileNames = fs.readdirSync(AUTH_FOLDER);
     const tasks = fileNames
       .filter(f => {
