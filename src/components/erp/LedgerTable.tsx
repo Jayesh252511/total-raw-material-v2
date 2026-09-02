@@ -391,8 +391,8 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
               <th className="sticky left-0 z-20 bg-muted/50 px-3 py-3 text-left font-semibold w-[72px] border-r border-border/50">Pc#</th>
               <th className="sticky left-[72px] z-20 bg-muted/50 px-3 py-3 text-left font-semibold w-[100px] border-r border-border/50">Date</th>
               <th className="sticky left-[172px] z-20 bg-muted/50 px-3 py-3 text-left font-semibold min-w-[160px] border-r border-border/50">Name</th>
-              <th className="px-3 py-3 text-right font-semibold w-[90px]">Qty (t)</th>
-              <th className="px-3 py-3 text-right font-semibold w-[80px]">Rate</th>
+              <th className="px-3 py-3 text-right font-semibold w-[110px]">Qty (t)</th>
+              <th className="px-3 py-3 text-right font-semibold w-[90px]">Rate</th>
               {isSell && <th className="px-3 py-3 text-right font-semibold w-[120px]">Amt (no GST)</th>}
               {isSell && <th className="px-3 py-3 text-right font-semibold w-[110px]">Gadi Bhada</th>}
               {isSell && <th className="px-3 py-3 text-right font-semibold w-[100px]">GST (₹)</th>}
@@ -452,40 +452,40 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                   </td>
                   {/* Qty */}
                   <td className="px-3 py-2.5 text-right">
-                    <input disabled={readOnly} type="number" step="0.001" defaultValue={r.quantity} onBlur={(e) => Number(e.target.value) !== Number(r.quantity) && updateField(r, "quantity", e.target.value)} className="cell-input text-right tabular-nums w-20" />
+                    <input disabled={readOnly} type="number" step="0.001" defaultValue={r.quantity} onBlur={(e) => Number(e.target.value) !== Number(r.quantity) && updateField(r, "quantity", e.target.value)} className="cell-input text-right tabular-nums w-full" />
                   </td>
                   {/* Rate */}
                   <td className="px-3 py-2.5 text-right">
-                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.rate} onBlur={(e) => Number(e.target.value) !== Number(r.rate) && updateField(r, "rate", e.target.value)} className="cell-input text-right tabular-nums w-20" />
+                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.rate} onBlur={(e) => Number(e.target.value) !== Number(r.rate) && updateField(r, "rate", e.target.value)} className="cell-input text-right tabular-nums w-full" />
                   </td>
                   {/* Amt (no GST) - calculated display */}
-                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm text-muted-foreground">{fmtNum(baseAmt, 0)}</td>}
+                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm text-muted-foreground">{fmtNum(baseAmt, 2)}</td>}
                   {/* Gadi Bhada */}
                   {isSell && (
                     <td className="px-3 py-2.5 text-right">
-                      <input disabled={readOnly} type="number" step="0.01" defaultValue={r.gadi_bhada || 0} onBlur={(e) => Number(e.target.value) !== Number(r.gadi_bhada || 0) && updateField(r, "gadi_bhada", e.target.value)} className="cell-input text-right tabular-nums w-24" />
+                      <input disabled={readOnly} type="number" step="0.01" defaultValue={r.gadi_bhada || 0} onBlur={(e) => Number(e.target.value) !== Number(r.gadi_bhada || 0) && updateField(r, "gadi_bhada", e.target.value)} className="cell-input text-right tabular-nums w-full" />
                     </td>
                   )}
                   {/* GST amt */}
-                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm text-orange-500 dark:text-orange-400">{fmtNum(gstAmt, 0)}</td>}
+                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm text-orange-500 dark:text-orange-400">{fmtNum(gstAmt, 2)}</td>}
                   {/* Total */}
-                  <td className="px-3 py-2.5 text-right tabular-nums text-sm font-semibold text-foreground">{fmtNum(total, 0)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-sm font-semibold text-foreground">{fmtNum(total, 2)}</td>
                   {/* w/o GB no GST */}
-                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm text-muted-foreground">{fmtNum(withoutGBNoGST, 0)}</td>}
+                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm text-muted-foreground">{fmtNum(withoutGBNoGST, 2)}</td>}
                   {/* w/o GB + GST */}
-                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm font-semibold">{fmtNum(without, 0)}</td>}
+                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm font-semibold">{fmtNum(without, 2)}</td>}
                   {/* Payment */}
                   <td className="px-3 py-2.5 text-right">
-                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.payment} onBlur={(e) => Number(e.target.value) !== Number(r.payment) && updateField(r, "payment", e.target.value)} className="cell-input text-right tabular-nums text-emerald-600 dark:text-emerald-400 font-semibold w-24" />
+                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.payment} onBlur={(e) => Number(e.target.value) !== Number(r.payment) && updateField(r, "payment", e.target.value)} className="cell-input text-right tabular-nums text-emerald-600 dark:text-emerald-400 font-semibold w-full" />
                   </td>
                   {/* Manual Amt */}
                   <td className="px-3 py-2.5 text-right">
-                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.manual_amount || 0} onBlur={(e) => Number(e.target.value) !== Number(r.manual_amount || 0) && updateField(r, "manual_amount", e.target.value)} className="cell-input text-right tabular-nums w-24" />
+                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.manual_amount || 0} onBlur={(e) => Number(e.target.value) !== Number(r.manual_amount || 0) && updateField(r, "manual_amount", e.target.value)} className="cell-input text-right tabular-nums w-full" />
                   </td>
                   {/* Difference */}
                   <td className={`px-3 py-2.5 text-right tabular-nums text-sm font-bold ${
                     diff === 0 ? "text-emerald-600 dark:text-emerald-400" : diff > 0 ? "text-destructive" : "text-amber-500"
-                  }`}>{fmtNum(diff, 0)}</td>
+                  }`}>{fmtNum(diff, 2)}</td>
                   {!readOnly && (
                     <td className="px-2 py-2.5 text-center">
                       <button onClick={() => deleteRow(r)} className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all">
