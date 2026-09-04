@@ -251,7 +251,7 @@ function detectCategory(note, paidTo) {
   const text = `${note} ${paidTo}`.toLowerCase();
   if (/petrol|diesel|fuel|pump|hpcl|bpcl|ioc|shell|petroleum/.test(text)) return 'petrol_diesel';
   if (/operator|salary|wages|majuri|worker|driver|staff|advance|remuneration/.test(text)) return 'operator';
-  return 'maintenance';
+  return 'other'; // ✅ Fixed: was 'maintenance' which is not a valid category on the website
 }
 
 // ─── REPORTS ───────────────────────────────────────────────────────────────
