@@ -815,28 +815,39 @@ async function handleText(text, sender = 'default') {
 // Stores each baileys_auth file as its own row with key = filename.
 // Uses bot_auth_files table with TEXT PRIMARY KEY so every UPSERT is reliable.
 
-async function upsertAuthFile(key, content) {
-  const payload = JSON.stringify({ key, content, updated_at: new Date().toISOString() });
-  return new Promise((resolve) => {
-    const body = Buffer.from(payload);
-    const opts = {
-      hostname: SUPABASE_URL,
-      path: '/rest/v1/bot_auth_files',
-      method: 'POST',
-      agent: keepAliveAgent,
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'resolution=merge-duplicates,return=minimal',
-        'Content-Length': body.length
-      }
-    };
-    const req = https.request(opts, (res) => { res.resume(); res.on('end', resolve); });
-    req.on('error', (e) => { console.error('upsertAuthFile error:', e.message); resolve(); });
-    req.write(body);
-    req.end();
-  });
+async function upsertAuthFile(key, content, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const success = await new Promise((resolve) => {
+      const payload = JSON.stringify({ key, content, updated_at: new Date().toISOString() });
+      const body = Buffer.from(payload);
+      const opts = {
+        hostname: SUPABASE_URL,
+        path: '/rest/v1/bot_auth_files',
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates,return=minimal',
+          'Content-Length': body.length
+        }
+      };
+      let done = false;
+      const finish = (ok) => { if (!done) { done = true; resolve(ok); } };
+      const req = https.request(opts, (res) => {
+        res.resume();
+        res.on('end', () => finish(res.statusCode < 300));
+      });
+      req.setTimeout(8000, () => { req.destroy(); finish(false); });
+      req.on('error', () => finish(false));
+      req.write(body);
+      req.end();
+    });
+    if (success) return true;
+    if (attempt < retries) await new Promise(r => setTimeout(r, 1000 * attempt));
+  }
+  console.error(`❌ upsertAuthFile failed after ${retries} attempts: ${key}`);
+  return false;
 }
 
 async function deleteAuthFile(key) {
@@ -1065,20 +1076,20 @@ async function forceSaveSessionToSupabase() {
       } catch {}
     }
 
-    const fileNames = fs.readdirSync(AUTH_FOLDER);
-    const tasks = fileNames
-      .filter(f => {
-        try { return fs.statSync(path.join(AUTH_FOLDER, f)).isFile(); } catch { return false; }
-      })
-      .map(f => {
-        try {
-          const content = fs.readFileSync(path.join(AUTH_FOLDER, f), 'utf8');
-          return upsertAuthFile(f, content);
-        } catch { return Promise.resolve(); }
-      });
+    const fileNames = fs.readdirSync(AUTH_FOLDER).filter(f => {
+      try { return fs.statSync(path.join(AUTH_FOLDER, f)).isFile(); } catch { return false; }
+    });
 
-    await Promise.all(tasks);
-    console.log(`🚀 FORCE-SAVED SESSION: ${tasks.length} files saved to Supabase DB!`);
+    // ✅ Sequential save (one-by-one) — prevents network saturation on Render free tier
+    let saved = 0;
+    for (const f of fileNames) {
+      try {
+        const content = fs.readFileSync(path.join(AUTH_FOLDER, f), 'utf8');
+        const ok = await upsertAuthFile(f, content);
+        if (ok) saved++;
+      } catch {}
+    }
+    console.log(`🚀 FORCE-SAVED SESSION: ${saved}/${fileNames.length} files saved to Supabase DB!`);
   } catch (e) {
     console.error('Force save error:', e?.message || e);
   }
