@@ -220,3 +220,22 @@
   animation: shimmer 2.5s infinite linear;
 }
 
+/* Hide Scrollbar for smooth mobile swipeable cards */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Smooth Horizontal Snap Scroll */
+.snap-x-mandatory {
+  scroll-snap-type: x mandatory;
+}
+.snap-align-start {
+  scroll-snap-align: start;
+}
+
+
+

@@ -220,15 +220,37 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
         </div>
       </header>
       <main className="mx-auto max-w-[1500px] space-y-5 px-3 py-4 sm:px-6 sm:py-5 relative z-10">{children}</main>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-2 pb-[env(safe-area-inset-bottom)] pt-2 shadow-elevated backdrop-blur md:hidden">
-        <div className="grid grid-cols-5 gap-1">
+      {/* Native App-Style Bottom Tab Bar for Mobile */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-background/90 px-3 pb-[calc(10px+env(safe-area-inset-bottom))] pt-2 shadow-elevated backdrop-blur-2xl md:hidden">
+        <div className="flex items-center justify-around">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.to;
             return (
-              <Link key={item.to} to={item.to} className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-[10px] font-medium ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
-                <Icon className="h-4 w-4" />
-                <span>{item.label}</span>
+              <Link
+                key={item.to}
+                to={item.to}
+                className={cn(
+                  "relative flex flex-col items-center justify-center transition-all duration-300 py-1 px-2.5 rounded-2xl min-w-[56px]",
+                  active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <div
+                  className={cn(
+                    "flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-300 transform",
+                    active
+                      ? "bg-gradient-to-tr from-primary to-indigo-500 text-primary-foreground shadow-soft scale-110 -translate-y-0.5"
+                      : "bg-muted/50 hover:bg-accent/60"
+                  )}
+                >
+                  <Icon className="h-4.5 w-4.5" />
+                </div>
+                <span className={cn("mt-1 text-[10px] font-bold tracking-tight transition-colors", active ? "text-primary font-extrabold" : "text-muted-foreground")}>
+                  {item.label}
+                </span>
+                {active && (
+                  <span className="absolute -bottom-1 h-1 w-5 rounded-full bg-primary animate-pulse" />
+                )}
               </Link>
             );
           })}

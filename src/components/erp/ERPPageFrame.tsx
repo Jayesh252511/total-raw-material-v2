@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 import { AlertsBar } from "@/components/erp/AlertsBar";
 import { AppShell } from "@/components/erp/AppShell";
+import { GoodMorningBanner } from "@/components/erp/GoodMorningBanner";
 import { SummaryCards } from "@/components/erp/SummaryCards";
 import { useAuth } from "@/lib/auth";
 import { useERPData } from "@/lib/erpStore";
-import { isThisYear, isToday, withGst } from "@/lib/format";
+import { isThisYear, isToday } from "@/lib/format";
 
 type Props = {
   children: (ctx: ReturnType<typeof useERPData> & { readOnly: boolean }) => React.ReactNode;
@@ -53,7 +54,20 @@ export function ERPPageFrame({ children, showSummary = true, showAlerts = true }
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-[88px] rounded-xl border bg-card animate-pulse" />)}
         </div>
-      ) : showSummary ? <SummaryCards {...stats} /> : null}
+      ) : (
+        <div className="space-y-4">
+          {/* Clean Dashboard Header */}
+          <GoodMorningBanner
+            effectiveMoney={erp.effectiveMoney}
+            totalStock={erp.totalStock}
+            todayExpense={stats.todayExpense}
+            todayTons={stats.todayTons}
+          />
+
+          {/* Summary Metric Cards */}
+          {showSummary && <SummaryCards {...stats} />}
+        </div>
+      )}
       {showAlerts && <AlertsBar settings={erp.settings} effectiveMoney={erp.effectiveMoney} totalStock={erp.totalStock} rawMaterials={erp.rawMaterials} expenses={erp.expenses} />}
       {children({ ...erp, readOnly })}
     </AppShell>

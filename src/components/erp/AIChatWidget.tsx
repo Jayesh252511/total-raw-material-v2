@@ -65,7 +65,7 @@ export function AIChatWidget({ rawMaterials = [], sells = [], expenses = [], set
       return `📦 Current Stock Balance: **${fmtTons(totalStock)}**`;
     }
     if (q.includes("money") || q.includes("cash") || q.includes("balance")) {
-      return `💰 Available Net Money: **${fmtINR(effectiveMoney)}** (Lock: ${fmtINR(settings.lock_money)})`;
+      return `💰 Available Net Money: **${fmtINR(effectiveMoney)}** (Lock: ${fmtINR(settings?.lock_money || 0)})`;
     }
     if (q.includes("sell") || q.includes("sale")) {
       const totalSells = sells.reduce((sum, s) => sum + (Number(s.payment) || 0), 0);

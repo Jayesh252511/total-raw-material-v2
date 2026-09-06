@@ -63,7 +63,7 @@ export function SettingsDialog({ settings, effectiveMoney, disabled }: { setting
             <p className="text-[11px] text-muted-foreground mt-1">Set the cash balance. Auto-deducted on entries.</p>
             <div className="mt-2 text-xs font-semibold text-primary bg-primary/5 border border-primary/10 rounded px-2 py-1 flex justify-between">
               <span>Net Available:</span>
-              <span className="font-bold tabular-nums">{fmtINR(effectiveMoney)}</span>
+              <span className="font-bold tabular-nums">{fmtINR(effectiveMoney || 0)}</span>
             </div>
           </div>
           <div>
