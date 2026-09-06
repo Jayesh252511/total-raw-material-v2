@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Sun, Sunrise, Sunset, Moon } from "lucide-react";
 import { fmtINR, fmtTons } from "@/lib/format";
 
 type Props = {
@@ -41,38 +40,48 @@ export function GoodMorningBanner({
   }, []);
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-soft transition-colors">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        {/* Left: Simple Clean Greeting */}
+    <div
+      className="relative overflow-hidden rounded-2xl border border-white/20 p-5 shadow-card transition-all"
+      style={{
+        backgroundImage: "url('/parth-fuel-bg.png')",
+        backgroundSize: "cover",
+        backgroundPosition: "center 40%",
+      }}
+    >
+      {/* Dark Legibility Overlay Gradient */}
+      <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/75 to-slate-900/85 backdrop-blur-[2px]" />
+
+      <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between text-white">
+        {/* Left: Greeting & Company Branding */}
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold tracking-tight text-foreground">
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white drop-shadow-md">
               {greeting}
             </h2>
-            <span className="text-xs text-muted-foreground font-mono bg-muted/60 px-2 py-0.5 rounded border border-border/40">
+            <span className="text-xs text-emerald-300 font-mono bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-500/40 backdrop-blur shadow-sm">
               {timeStr}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Total Raw Material • Business Overview & Live Ledger
+          <p className="text-xs text-slate-300 font-medium mt-1 drop-shadow">
+            Total Raw Material • People • Planet • Progress • Live Business Ledger
           </p>
         </div>
 
-        {/* Right: Quick Clean Key Metrics */}
+        {/* Right: Key Metrics Glass Pills */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="rounded-lg bg-muted/50 px-3 py-1.5 border border-border/40">
-            <span className="block text-[10px] uppercase font-semibold text-muted-foreground">Net Balance</span>
-            <span className="text-sm font-bold tabular-nums text-foreground">{fmtINR(effectiveMoney)}</span>
+          <div className="rounded-xl bg-slate-900/80 px-3.5 py-2 border border-white/15 backdrop-blur-md shadow-soft">
+            <span className="block text-[10px] uppercase font-bold text-slate-400">Net Balance</span>
+            <span className="text-sm font-extrabold tabular-nums text-emerald-400">{fmtINR(effectiveMoney)}</span>
           </div>
 
-          <div className="rounded-lg bg-muted/50 px-3 py-1.5 border border-border/40">
-            <span className="block text-[10px] uppercase font-semibold text-muted-foreground">Current Stock</span>
-            <span className="text-sm font-bold tabular-nums text-foreground">{fmtTons(totalStock)}</span>
+          <div className="rounded-xl bg-slate-900/80 px-3.5 py-2 border border-white/15 backdrop-blur-md shadow-soft">
+            <span className="block text-[10px] uppercase font-bold text-slate-400">Current Stock</span>
+            <span className="text-sm font-extrabold tabular-nums text-sky-300">{fmtTons(totalStock)}</span>
           </div>
 
-          <div className="rounded-lg bg-muted/50 px-3 py-1.5 border border-border/40">
-            <span className="block text-[10px] uppercase font-semibold text-muted-foreground">Today Dispatched</span>
-            <span className="text-sm font-bold tabular-nums text-foreground">{fmtTons(todayTons)}</span>
+          <div className="rounded-xl bg-slate-900/80 px-3.5 py-2 border border-white/15 backdrop-blur-md shadow-soft">
+            <span className="block text-[10px] uppercase font-bold text-slate-400">Today Dispatched</span>
+            <span className="text-sm font-extrabold tabular-nums text-amber-300">{fmtTons(todayTons)}</span>
           </div>
         </div>
       </div>
