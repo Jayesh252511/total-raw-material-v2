@@ -385,23 +385,23 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
 
       {/* Desktop table */}
       <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-soft md:block">
-        <table className="w-full text-sm" style={{ minWidth: isSell ? "1520px" : "860px" }}>
+        <table className="w-full text-sm" style={{ minWidth: isSell ? "1780px" : "960px" }}>
           <thead className="bg-muted/50 text-[11px] uppercase tracking-wider text-muted-foreground border-b border-border">
             <tr>
-              <th className="sticky left-0 z-20 bg-muted/50 px-3 py-3 text-left font-semibold w-[72px] border-r border-border/50">Pc#</th>
-              <th className="sticky left-[72px] z-20 bg-muted/50 px-3 py-3 text-left font-semibold w-[100px] border-r border-border/50">Date</th>
-              <th className="sticky left-[172px] z-20 bg-muted/50 px-3 py-3 text-left font-semibold min-w-[160px] border-r border-border/50">Name</th>
-              <th className="px-3 py-3 text-right font-semibold w-[110px]">Qty (t)</th>
-              <th className="px-3 py-3 text-right font-semibold w-[90px]">Rate</th>
-              {isSell && <th className="px-3 py-3 text-right font-semibold w-[120px]">Amt (no GST)</th>}
-              {isSell && <th className="px-3 py-3 text-right font-semibold w-[110px]">Gadi Bhada</th>}
-              {isSell && <th className="px-3 py-3 text-right font-semibold w-[100px]">GST (₹)</th>}
-              <th className="px-3 py-3 text-right font-semibold w-[130px]">Total{isSell ? " (+GST)" : ""}</th>
-              {isSell && <th className="px-3 py-3 text-right font-semibold w-[130px]">w/o GB (no GST)</th>}
-              {isSell && <th className="px-3 py-3 text-right font-semibold w-[130px]">w/o GB (+GST)</th>}
-              <th className="px-3 py-3 text-right font-semibold w-[120px]">Payment</th>
-              <th className="px-3 py-3 text-right font-semibold w-[110px]">Manual Amt</th>
-              <th className="px-3 py-3 text-right font-semibold w-[120px]">Difference</th>
+              <th className="sticky left-0 z-20 bg-muted/50 px-3 py-3 text-left font-bold w-[76px] border-r border-border/50">Pc#</th>
+              <th className="sticky left-[76px] z-20 bg-muted/50 px-3 py-3 text-left font-bold w-[104px] border-r border-border/50">Date</th>
+              <th className="sticky left-[180px] z-20 bg-muted/50 px-3 py-3 text-left font-bold min-w-[170px] border-r border-border/50">Name</th>
+              <th className="px-3 py-3 text-right font-bold w-[125px]">Qty (t)</th>
+              <th className="px-3 py-3 text-right font-bold w-[105px]">Rate</th>
+              {isSell && <th className="px-3 py-3 text-right font-bold w-[140px]">Amt (no GST)</th>}
+              {isSell && <th className="px-3 py-3 text-right font-bold w-[130px]">Gadi Bhada</th>}
+              {isSell && <th className="px-3 py-3 text-right font-bold w-[125px]">GST (₹)</th>}
+              <th className="px-3 py-3 text-right font-bold w-[155px]">Total{isSell ? " (+GST)" : ""}</th>
+              {isSell && <th className="px-3 py-3 text-right font-bold w-[155px]">w/o GB (no GST)</th>}
+              {isSell && <th className="px-3 py-3 text-right font-bold w-[155px]">w/o GB (+GST)</th>}
+              <th className="px-3 py-3 text-right font-bold w-[145px]">Payment</th>
+              <th className="px-3 py-3 text-right font-bold w-[135px]">Manual Amt</th>
+              <th className="px-3 py-3 text-right font-bold w-[155px]">Difference</th>
               {!readOnly && <th className="w-12"></th>}
             </tr>
           </thead>
@@ -423,13 +423,13 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                       type="number"
                       defaultValue={r.serial_number}
                       onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)}
-                      className="cell-input text-center tabular-nums font-semibold text-primary w-14"
+                      className="cell-input text-center tabular-nums font-bold text-primary w-14"
                     />
                   </td>
                   {/* Date — sticky */}
-                  <td className="sticky left-[72px] z-10 bg-card group-hover:bg-muted/25 transition-colors px-3 py-2.5 border-r border-border/50">
+                  <td className="sticky left-[76px] z-10 bg-card group-hover:bg-muted/25 transition-colors px-3 py-2.5 border-r border-border/50">
                     <div className="relative flex items-center">
-                      <span className="text-sm tabular-nums font-semibold text-foreground whitespace-nowrap">{formatDate(r.entry_date)}</span>
+                      <span className="text-sm tabular-nums font-bold text-foreground whitespace-nowrap">{formatDate(r.entry_date)}</span>
                       {!readOnly && (
                         <input
                           type="date"
@@ -441,50 +441,50 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                     </div>
                   </td>
                   {/* Name — sticky */}
-                  <td className="sticky left-[172px] z-10 bg-card group-hover:bg-muted/25 transition-colors px-3 py-2.5 border-r border-border/50 min-w-[160px]">
+                  <td className="sticky left-[180px] z-10 bg-card group-hover:bg-muted/25 transition-colors px-3 py-2.5 border-r border-border/50 min-w-[170px]">
                     <input
                       disabled={readOnly}
                       defaultValue={r.name}
                       onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)}
-                      className="cell-input text-sm font-medium w-full"
+                      className="cell-input text-sm sm:text-base font-bold w-full"
                       placeholder="Name..."
                     />
                   </td>
                   {/* Qty */}
-                  <td className="px-3 py-2.5 text-right">
-                    <input disabled={readOnly} type="number" step="0.001" defaultValue={r.quantity} onBlur={(e) => Number(e.target.value) !== Number(r.quantity) && updateField(r, "quantity", e.target.value)} className="cell-input text-right tabular-nums w-full" />
+                  <td className="px-2 py-2 text-right">
+                    <input disabled={readOnly} type="number" step="0.001" defaultValue={r.quantity} onBlur={(e) => Number(e.target.value) !== Number(r.quantity) && updateField(r, "quantity", e.target.value)} className="cell-input text-right font-extrabold text-sm sm:text-base tabular-nums w-full" />
                   </td>
                   {/* Rate */}
-                  <td className="px-3 py-2.5 text-right">
-                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.rate} onBlur={(e) => Number(e.target.value) !== Number(r.rate) && updateField(r, "rate", e.target.value)} className="cell-input text-right tabular-nums w-full" />
+                  <td className="px-2 py-2 text-right">
+                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.rate} onBlur={(e) => Number(e.target.value) !== Number(r.rate) && updateField(r, "rate", e.target.value)} className="cell-input text-right font-extrabold text-sm sm:text-base tabular-nums w-full" />
                   </td>
                   {/* Amt (no GST) - calculated display */}
-                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm text-muted-foreground">{fmtNum(baseAmt, 2)}</td>}
+                  {isSell && <td className="px-2.5 py-2 text-right font-bold tabular-nums text-sm sm:text-base text-foreground">{fmtNum(baseAmt, 2)}</td>}
                   {/* Gadi Bhada */}
                   {isSell && (
-                    <td className="px-3 py-2.5 text-right">
-                      <input disabled={readOnly} type="number" step="0.01" defaultValue={r.gadi_bhada || 0} onBlur={(e) => Number(e.target.value) !== Number(r.gadi_bhada || 0) && updateField(r, "gadi_bhada", e.target.value)} className="cell-input text-right tabular-nums w-full" />
+                    <td className="px-2 py-2 text-right">
+                      <input disabled={readOnly} type="number" step="0.01" defaultValue={r.gadi_bhada || 0} onBlur={(e) => Number(e.target.value) !== Number(r.gadi_bhada || 0) && updateField(r, "gadi_bhada", e.target.value)} className="cell-input text-right font-extrabold text-sm sm:text-base tabular-nums w-full" />
                     </td>
                   )}
                   {/* GST amt */}
-                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm text-orange-500 dark:text-orange-400">{fmtNum(gstAmt, 2)}</td>}
+                  {isSell && <td className="px-2.5 py-2 text-right font-bold tabular-nums text-sm sm:text-base text-orange-600 dark:text-orange-400">{fmtNum(gstAmt, 2)}</td>}
                   {/* Total */}
-                  <td className="px-3 py-2.5 text-right tabular-nums text-sm font-semibold text-foreground">{fmtNum(total, 2)}</td>
+                  <td className="px-2.5 py-2 text-right font-black tabular-nums text-sm sm:text-base text-foreground">{fmtNum(total, 2)}</td>
                   {/* w/o GB no GST */}
-                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm text-muted-foreground">{fmtNum(withoutGBNoGST, 2)}</td>}
+                  {isSell && <td className="px-2.5 py-2 text-right font-bold tabular-nums text-sm sm:text-base text-foreground/80">{fmtNum(withoutGBNoGST, 2)}</td>}
                   {/* w/o GB + GST */}
-                  {isSell && <td className="px-3 py-2.5 text-right tabular-nums text-sm font-semibold">{fmtNum(without, 2)}</td>}
+                  {isSell && <td className="px-2.5 py-2 text-right font-extrabold tabular-nums text-sm sm:text-base text-foreground">{fmtNum(without, 2)}</td>}
                   {/* Payment */}
-                  <td className="px-3 py-2.5 text-right">
-                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.payment} onBlur={(e) => Number(e.target.value) !== Number(r.payment) && updateField(r, "payment", e.target.value)} className="cell-input text-right tabular-nums text-emerald-600 dark:text-emerald-400 font-semibold w-full" />
+                  <td className="px-2 py-2 text-right">
+                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.payment} onBlur={(e) => Number(e.target.value) !== Number(r.payment) && updateField(r, "payment", e.target.value)} className="cell-input text-right font-extrabold tabular-nums text-emerald-600 dark:text-emerald-400 text-sm sm:text-base w-full" />
                   </td>
                   {/* Manual Amt */}
-                  <td className="px-3 py-2.5 text-right">
-                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.manual_amount || 0} onBlur={(e) => Number(e.target.value) !== Number(r.manual_amount || 0) && updateField(r, "manual_amount", e.target.value)} className="cell-input text-right tabular-nums w-full" />
+                  <td className="px-2 py-2 text-right">
+                    <input disabled={readOnly} type="number" step="0.01" defaultValue={r.manual_amount || 0} onBlur={(e) => Number(e.target.value) !== Number(r.manual_amount || 0) && updateField(r, "manual_amount", e.target.value)} className="cell-input text-right font-extrabold tabular-nums text-sm sm:text-base w-full" />
                   </td>
                   {/* Difference */}
-                  <td className={`px-3 py-2.5 text-right tabular-nums text-sm font-bold ${
-                    diff === 0 ? "text-emerald-600 dark:text-emerald-400" : diff > 0 ? "text-destructive" : "text-amber-500"
+                  <td className={`px-2.5 py-2 text-right tabular-nums text-sm sm:text-base font-black ${
+                    diff === 0 ? "text-emerald-600 dark:text-emerald-400" : diff > 0 ? "text-destructive" : "text-amber-600 dark:text-amber-400"
                   }`}>{fmtNum(diff, 2)}</td>
                   {!readOnly && (
                     <td className="px-2 py-2.5 text-center">
