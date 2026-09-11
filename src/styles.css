@@ -248,5 +248,45 @@
   scroll-snap-align: start;
 }
 
+/* Custom Thick Horizontal & Vertical Scrollbar for ERP Tables */
+.custom-table-scrollbar::-webkit-scrollbar {
+  height: 16px;
+  width: 16px;
+}
+
+.custom-table-scrollbar::-webkit-scrollbar-track {
+  background: oklch(0.92 0.01 250);
+  border-radius: 8px;
+}
+
+.custom-table-scrollbar::-webkit-scrollbar-thumb {
+  background-color: oklch(0.48 0.15 265);
+  border-radius: 8px;
+  border: 3px solid oklch(0.92 0.01 250);
+}
+
+.custom-table-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.38 0.18 265);
+}
+
+.dark .custom-table-scrollbar::-webkit-scrollbar-track {
+  background: oklch(0.22 0.02 260);
+}
+
+.dark .custom-table-scrollbar::-webkit-scrollbar-thumb {
+  background-color: oklch(0.68 0.18 265);
+  border: 3px solid oklch(0.22 0.02 260);
+}
+
+.dark .custom-table-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.78 0.2 265);
+}
+
+/* Firefox scrollbar support */
+.custom-table-scrollbar {
+  scrollbar-width: auto;
+  scrollbar-color: oklch(0.48 0.15 265) oklch(0.92 0.01 250);
+}
+
 
 

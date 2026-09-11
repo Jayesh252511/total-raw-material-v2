@@ -4,7 +4,9 @@ export const fmtINR = (n: number) =>
   );
 
 export const fmtNum = (n: number, digits = 2) =>
-  new Intl.NumberFormat("en-IN", { maximumFractionDigits: digits }).format(Number.isFinite(n) ? n : 0);
+  new Intl.NumberFormat("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(
+    Number.isFinite(n) ? n : 0,
+  );
 
 export const fmtTons = (n: number) => `${fmtNum(n, 3)} t`;
 
