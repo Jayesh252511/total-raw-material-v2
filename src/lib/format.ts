@@ -28,3 +28,16 @@ export const isThisYear = (d: string) => {
 
 export const SELL_GST_RATE = 0.05;
 export const withGst = (n: number) => n * (1 + SELL_GST_RATE);
+
+export const formatDate = (dateStr: string) => {
+  if (!dateStr) return "";
+  const parts = dateStr.split("-");
+  if (parts.length === 3) {
+    const year = parts[0].slice(-2);
+    const month = parts[1];
+    const day = parts[2];
+    return `${day}-${month}-${year}`;
+  }
+  return dateStr;
+};
+

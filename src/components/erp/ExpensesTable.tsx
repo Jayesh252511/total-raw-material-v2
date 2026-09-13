@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Expense, ExpenseCategory } from "@/lib/erpStore";
 import { fmtINR, todayStr, isToday, isThisYear } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
-import { Plus, Search, Trash2, X, Fuel, UserCog, Package } from "lucide-react";
+import { Plus, Search, Trash2, X, Fuel, UserCog, Package, CalendarDays } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -127,7 +127,30 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
                 {!readOnly && <button onClick={() => deleteRow(r)} className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>}
               </div>
               <div className="grid gap-2">
-                <label><span className="text-[10px] uppercase text-muted-foreground">Date</span><input disabled={readOnly} type="date" value={r.entry_date} onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} onBlur={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input" /></label>
+                <label className="space-y-1">
+                  <span className="text-[10px] uppercase text-muted-foreground">Date</span>
+                  <div 
+                    className="relative flex items-center justify-between gap-1 rounded-md border border-input/60 bg-background hover:bg-accent/40 px-3 py-2 cursor-pointer transition-colors group"
+                    onClick={(e) => {
+                      if (readOnly) return;
+                      const input = e.currentTarget.querySelector('input');
+                      if (input && 'showPicker' in input) {
+                        try { (input as HTMLInputElement).showPicker(); } catch {}
+                      }
+                    }}
+                  >
+                    <span className="text-xs sm:text-sm font-bold tabular-nums text-primary">{formatDate(r.entry_date)}</span>
+                    <CalendarDays className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                    {!readOnly && (
+                      <input 
+                        type="date" 
+                        value={r.entry_date} 
+                        onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} 
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+                      />
+                    )}
+                  </div>
+                </label>
                 <label><span className="text-[10px] uppercase text-muted-foreground">Description</span><input disabled={readOnly} defaultValue={r.name} placeholder="Details" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" /></label>
                 <label><span className="text-[10px] uppercase text-muted-foreground">Amount</span><input disabled={readOnly} type="number" step="0.01" defaultValue={r.amount} onBlur={(e) => Number(e.target.value) !== Number(r.amount) && updateField(r, "amount", e.target.value)} className="cell-input text-right tabular-nums" /></label>
               </div>
@@ -152,14 +175,22 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
                 <tr key={r.id} className="border-t hover:bg-muted/20">
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input text-left tabular-nums" /></td>
                   <td className="px-1 py-1">
-                    <div className="relative w-full flex items-center px-2 min-h-[36px]">
-                      <span className="text-xs tabular-nums text-primary font-bold pointer-events-none">{formatDate(r.entry_date)}</span>
+                    <div 
+                      className="relative flex items-center justify-between gap-1 rounded-md border border-input/60 bg-background hover:bg-accent/40 px-2 py-1 cursor-pointer transition-colors group min-h-[34px]"
+                      onClick={(e) => {
+                        const input = e.currentTarget.querySelector('input');
+                        if (input && 'showPicker' in input) {
+                          try { input.showPicker(); } catch {}
+                        }
+                      }}
+                    >
+                      <span className="text-xs sm:text-sm font-bold tabular-nums text-primary">{formatDate(r.entry_date)}</span>
+                      <CalendarDays className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
                       {!readOnly && (
                         <input 
                           type="date" 
                           value={r.entry_date} 
                           onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} 
-                          onBlur={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} 
                           className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
                         />
                       )}

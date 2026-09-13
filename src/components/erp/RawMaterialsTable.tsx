@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { RawMaterial } from "@/lib/erpStore";
-import { fmtINR, fmtNum, todayStr, isToday, isThisYear } from "@/lib/format";
+import { fmtINR, fmtNum, todayStr, isToday, isThisYear, formatDate } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
 import { CalendarDays, Plus, Search, Trash2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -84,11 +84,11 @@ export function RawMaterialsTable({ rows, readOnly, onChanged }: Props) {
           </div>
           <label className="space-y-1">
             <span className="text-[10px] font-medium uppercase text-muted-foreground">From</span>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 sm:h-8 sm:w-36 text-sm sm:text-xs" />
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} onClick={(e) => { try { e.currentTarget.showPicker(); } catch {} }} className="h-10 sm:h-8 sm:w-36 text-sm sm:text-xs" />
           </label>
           <label className="space-y-1">
             <span className="text-[10px] font-medium uppercase text-muted-foreground">To</span>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 sm:h-8 sm:w-36 text-sm sm:text-xs" />
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} onClick={(e) => { try { e.currentTarget.showPicker(); } catch {} }} className="h-10 sm:h-8 sm:w-36 text-sm sm:text-xs" />
           </label>
           {(q || from || to) && (
             <Button variant="outline" size="sm" onClick={() => { setQ(""); setFrom(""); setTo(""); }} className="h-10 sm:h-8">
@@ -115,9 +115,26 @@ export function RawMaterialsTable({ rows, readOnly, onChanged }: Props) {
             <div className="grid grid-cols-2 gap-2">
               <label className="col-span-2 space-y-1">
                 <span className="text-[10px] font-medium uppercase text-muted-foreground">Date</span>
-                <div className="relative">
-                  <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input disabled={readOnly} type="date" value={r.entry_date} onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} onBlur={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input pl-8" />
+                <div 
+                  className="relative flex items-center justify-between gap-1 rounded-md border border-input/60 bg-background hover:bg-accent/40 px-3 py-2 cursor-pointer transition-colors group"
+                  onClick={(e) => {
+                    if (readOnly) return;
+                    const input = e.currentTarget.querySelector('input');
+                    if (input && 'showPicker' in input) {
+                      try { (input as HTMLInputElement).showPicker(); } catch {}
+                    }
+                  }}
+                >
+                  <span className="text-xs sm:text-sm font-bold tabular-nums text-primary">{formatDate(r.entry_date)}</span>
+                  <CalendarDays className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                  {!readOnly && (
+                    <input 
+                      type="date" 
+                      value={r.entry_date} 
+                      onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} 
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+                    />
+                  )}
                 </div>
               </label>
               <label className="col-span-2 space-y-1">
@@ -161,7 +178,27 @@ export function RawMaterialsTable({ rows, readOnly, onChanged }: Props) {
               <tr key={r.id} className="border-t hover:bg-muted/20 transition-colors">
                 <td className="px-3 py-1 text-muted-foreground tabular-nums">{r.serial_number}</td>
                 <td className="px-1 py-1">
-                  <input disabled={readOnly} type="date" value={r.entry_date} onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} onBlur={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input" />
+                  <div 
+                    className="relative flex items-center justify-between gap-1 rounded-md border border-input/60 bg-background hover:bg-accent/40 px-2 py-1 cursor-pointer transition-colors group min-h-[34px]"
+                    onClick={(e) => {
+                      if (readOnly) return;
+                      const input = e.currentTarget.querySelector('input');
+                      if (input && 'showPicker' in input) {
+                        try { (input as HTMLInputElement).showPicker(); } catch {}
+                      }
+                    }}
+                  >
+                    <span className="text-xs sm:text-sm font-bold tabular-nums text-primary">{formatDate(r.entry_date)}</span>
+                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                    {!readOnly && (
+                      <input 
+                        type="date" 
+                        value={r.entry_date} 
+                        onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} 
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+                      />
+                    )}
+                  </div>
                 </td>
                 <td className="px-1 py-1">
                   <input disabled={readOnly} defaultValue={r.name} placeholder="Client / supplier" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" />

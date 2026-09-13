@@ -1,9 +1,9 @@
 import { useMemo, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { RawMaterial } from "@/lib/erpStore";
-import { fmtINR, fmtNum, todayStr, withGst, SELL_GST_RATE } from "@/lib/format";
+import { fmtINR, fmtNum, todayStr, withGst, SELL_GST_RATE, formatDate } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
-import { Filter, Plus, Search, Trash2, X, FileSpreadsheet, FileText } from "lucide-react";
+import { Filter, Plus, Search, Trash2, X, FileSpreadsheet, FileText, CalendarDays } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -13,17 +13,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-const formatDate = (dateStr: string) => {
-  if (!dateStr) return "";
-  const parts = dateStr.split("-");
-  if (parts.length === 3) {
-    const year = parts[0].slice(-2);
-    const month = parts[1];
-    const day = parts[2];
-    return `${day}-${month}-${year}`;
-  }
-  return dateStr;
-};
+
 
 function getInitials(name?: string) {
   if (!name || typeof name !== "string") return "—";
@@ -343,7 +333,28 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                     <span>#</span>
                     <input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input !h-6 !w-16 !px-1 text-xs tabular-nums" />
-                    <span>· {formatDate(r.entry_date)}</span>
+                    <span>·</span>
+                    <div 
+                      className="relative inline-flex items-center gap-1 rounded border border-input/60 bg-background hover:bg-accent/40 px-1.5 py-0.5 cursor-pointer transition-colors group"
+                      onClick={(e) => {
+                        if (readOnly) return;
+                        const input = e.currentTarget.querySelector('input');
+                        if (input && 'showPicker' in input) {
+                          try { (input as HTMLInputElement).showPicker(); } catch {}
+                        }
+                      }}
+                    >
+                      <CalendarDays className="h-3 w-3 text-muted-foreground group-hover:text-primary shrink-0" />
+                      <span className="text-xs font-bold tabular-nums text-primary">{formatDate(r.entry_date)}</span>
+                      {!readOnly && (
+                        <input 
+                          type="date" 
+                          value={r.entry_date} 
+                          onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} 
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+                        />
+                      )}
+                    </div>
                   </div>
                   <p className="text-sm font-semibold mt-0.5">{r.name || "—"}</p>
                 </div>
@@ -427,15 +438,24 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                     />
                   </td>
                   {/* Date — sticky */}
-                  <td className="sticky left-[70px] z-20 bg-card group-hover:bg-muted/30 transition-colors px-2 py-2.5 border-r border-border/50 w-[110px] min-w-[110px]">
-                    <div className="relative flex items-center">
-                      <span className="text-sm tabular-nums font-bold text-foreground whitespace-nowrap px-1">{formatDate(r.entry_date)}</span>
+                  <td className="sticky left-[70px] z-20 bg-card group-hover:bg-muted/30 transition-colors px-1 py-1 border-r border-border/50 w-[110px] min-w-[110px]">
+                    <div 
+                      className="relative flex items-center justify-between gap-1 rounded-md border border-input/60 bg-background hover:bg-accent/40 px-2 py-1 cursor-pointer transition-colors group min-h-[34px]"
+                      onClick={(e) => {
+                        if (readOnly) return;
+                        const input = e.currentTarget.querySelector('input');
+                        if (input && 'showPicker' in input) {
+                          try { (input as HTMLInputElement).showPicker(); } catch {}
+                        }
+                      }}
+                    >
+                      <span className="text-xs sm:text-sm font-bold tabular-nums text-primary whitespace-nowrap">{formatDate(r.entry_date)}</span>
+                      <CalendarDays className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
                       {!readOnly && (
                         <input
                           type="date"
                           value={r.entry_date}
                           onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)}
-                          onBlur={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)}
                           className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                         />
                       )}
