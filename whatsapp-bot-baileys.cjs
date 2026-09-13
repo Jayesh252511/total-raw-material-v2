@@ -229,7 +229,7 @@ async function processPhonePeImage(base64Image, mimeType) {
   "paid_to_name": "Recipient name",
   "amount": 1234.00,
   "transaction_id": "Txn ID string",
-  "date": "YYYY-MM-DD (Exact payment date on screenshot e.g. 2026-09-10. Convert format like '10 Sep 2026', '10/09/2026', 'Sep 10, 2026' into YYYY-MM-DD. If year is missing, assume 2026)",
+  "date": "Date string",
   "message": "Payment note/purpose"
 }
 Rules: Return ONLY valid JSON, no markdown. If not PhonePe, set amount null.`;
@@ -1239,24 +1239,18 @@ async function forceSaveSessionToSupabase() {
           const category = detectCategory(data.message || '', data.paid_to_name || '');
           const catLabel = category === 'petrol_diesel' ? '⛽ Petrol/Diesel' : category === 'operator' ? '👷 Operator' : '📦 Other';
           const entryName = data.message ? `${data.paid_to_name} (${data.message})` : data.paid_to_name || 'PhonePe Expense';
-
-          let screenshotDate = today();
-          if (data.date) {
-            const parsed = parseDateInput(data.date);
-            if (parsed) screenshotDate = parsed;
-          }
+          const entryDate = parseDateInput(data.date) || today();
 
           await supabase('POST', 'expenses', {
-            entry_date: screenshotDate,
+            entry_date: entryDate,
             name: entryName,
             amount: data.amount,
             category,
             phonepay_txn_id: data.transaction_id || null
           });
 
-          const dateFmt = screenshotDate.split('-').reverse().join('-');
           await sock.sendMessage(jid, {
-            text: `✅ *Expense Added!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${dateFmt}*\n💰 Amount: *${fmtINR(data.amount)}*\n📝 Name: *${entryName}*\n🏷️ Category: *${catLabel}*\n🔖 Txn ID: ${data.transaction_id || 'N/A'}\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete last" likho_`
+            text: `✅ *Expense Added!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${entryDate.split('-').reverse().join('-')}*\n💰 Amount: *${fmtINR(data.amount)}*\n📝 Name: *${entryName}*\n🏷️ Category: *${catLabel}*\n🔖 Txn ID: ${data.transaction_id || 'N/A'}\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete last" likho_`
           });
 
         } else if (textContent) {

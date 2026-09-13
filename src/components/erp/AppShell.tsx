@@ -4,7 +4,6 @@ import { BarChart3, Boxes, FileSpreadsheet, FileText, Home, Layers, Lock, Receip
 import { Button } from "@/components/ui/button";
 import { AuthButton } from "@/components/erp/AuthButton";
 import { SettingsDialog } from "@/components/erp/SettingsDialog";
-import { WhatsAppBotDialog } from "@/components/erp/WhatsAppBotDialog";
 import { MoneyHistoryDialog } from "@/components/erp/MoneyHistoryDialog";
 import { Toaster } from "@/components/ui/sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -174,10 +173,10 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
                 <p className="truncate text-[11px] leading-tight text-muted-foreground">Inventory · Sells · Expenses</p>
               </div>
             </Link>
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+            <a href="https://total-raw-material-v2.onrender.com" target="_blank" rel="noreferrer" className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-colors">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Vercel Cloud Live</span>
-            </div>
+              <span>24/7 Cloud Bot</span>
+            </a>
           </div>
 
           <nav className="hidden items-center gap-1 rounded-xl border border-border/50 bg-card/60 backdrop-blur-md p-1 shadow-soft md:flex">
@@ -208,7 +207,6 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
               <kbd className="font-mono text-[10px] bg-muted px-1 rounded border">Ctrl K</kbd>
             </Button>
             <AddFundsDialog currentMoney={settings.total_money} effectiveMoney={effectiveMoney} currentLock={settings.lock_money} disabled={readOnly} />
-            <WhatsAppBotDialog readOnly={readOnly} />
             <ThemeToggle />
             <AuthButton />
             <SettingsDialog settings={settings} effectiveMoney={effectiveMoney} disabled={readOnly} />

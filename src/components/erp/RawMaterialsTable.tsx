@@ -117,7 +117,7 @@ export function RawMaterialsTable({ rows, readOnly, onChanged }: Props) {
                 <span className="text-[10px] font-medium uppercase text-muted-foreground">Date</span>
                 <div className="relative">
                   <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input disabled={readOnly} type="date" defaultValue={r.entry_date} onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input pl-8" />
+                  <input disabled={readOnly} type="date" value={r.entry_date} onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} onBlur={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input pl-8" />
                 </div>
               </label>
               <label className="col-span-2 space-y-1">
@@ -161,7 +161,7 @@ export function RawMaterialsTable({ rows, readOnly, onChanged }: Props) {
               <tr key={r.id} className="border-t hover:bg-muted/20 transition-colors">
                 <td className="px-3 py-1 text-muted-foreground tabular-nums">{r.serial_number}</td>
                 <td className="px-1 py-1">
-                  <input disabled={readOnly} type="date" defaultValue={r.entry_date} onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input" />
+                  <input disabled={readOnly} type="date" value={r.entry_date} onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} onBlur={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input" />
                 </td>
                 <td className="px-1 py-1">
                   <input disabled={readOnly} defaultValue={r.name} placeholder="Client / supplier" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" />
