@@ -4,6 +4,7 @@ import { BarChart3, Boxes, FileSpreadsheet, FileText, Home, Layers, Lock, Receip
 import { Button } from "@/components/ui/button";
 import { AuthButton } from "@/components/erp/AuthButton";
 import { SettingsDialog } from "@/components/erp/SettingsDialog";
+import { WhatsAppBotDialog } from "@/components/erp/WhatsAppBotDialog";
 import { MoneyHistoryDialog } from "@/components/erp/MoneyHistoryDialog";
 import { Toaster } from "@/components/ui/sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -207,6 +208,7 @@ export function AppShell({ children, settings, effectiveMoney, readOnly, rawMate
               <kbd className="font-mono text-[10px] bg-muted px-1 rounded border">Ctrl K</kbd>
             </Button>
             <AddFundsDialog currentMoney={settings.total_money} effectiveMoney={effectiveMoney} currentLock={settings.lock_money} disabled={readOnly} />
+            <WhatsAppBotDialog readOnly={readOnly} />
             <ThemeToggle />
             <AuthButton />
             <SettingsDialog settings={settings} effectiveMoney={effectiveMoney} disabled={readOnly} />
