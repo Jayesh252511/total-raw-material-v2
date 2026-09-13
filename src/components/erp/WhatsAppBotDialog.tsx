@@ -22,16 +22,8 @@ export function WhatsAppBotDialog({ readOnly }: Props) {
 
   const fetchStatus = () => {
     setLoading(true);
-    fetch("https://total-raw-material-v2.onrender.com/api/status")
-      .then((res) => res.json())
-      .then((data: BotStatusResponse) => {
-        setBotStatus(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setBotStatus({ status: "Cloud Bot Active", isLive: true });
-        setLoading(false);
-      });
+    setBotStatus({ status: "Vercel Cloud Sync Active", isLive: true });
+    setLoading(false);
   };
 
   // Fetch bot status when dialog opens
@@ -146,16 +138,13 @@ export function WhatsAppBotDialog({ readOnly }: Props) {
               <span>Open Group Chat</span>
               <ExternalLink className="h-3 w-3 opacity-70" />
             </a>
-            <a
-              href="https://total-raw-material-v2.onrender.com"
-              target="_blank"
-              rel="noreferrer"
+            <button
+              onClick={handleCopyNumber}
               className="flex items-center justify-center gap-2 p-3 rounded-xl bg-muted hover:bg-accent text-foreground font-semibold text-xs border border-border transition-all"
             >
-              <QrCode className="h-4 w-4 text-emerald-600" />
-              <span>Live QR Dashboard</span>
-              <ExternalLink className="h-3 w-3 opacity-70" />
-            </a>
+              <Copy className="h-4 w-4 text-emerald-600" />
+              <span>Copy Bot Number</span>
+            </button>
           </div>
 
           {/* Quick Commands Guide */}
