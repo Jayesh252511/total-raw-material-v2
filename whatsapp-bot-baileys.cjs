@@ -1100,6 +1100,13 @@ async function forceSaveSessionToSupabase() {
       try {
         currentQRCodeImage = await qrcode.toDataURL(qr, { margin: 2, scale: 8 });
         botStatus = 'Scan QR Code below';
+        console.log('\n==================================================');
+        console.log('📷 SCAN THIS QR CODE WITH WHATSAPP ON YOUR PHONE:');
+        console.log('==================================================');
+        try {
+          const qrcodeTerminal = require('qrcode-terminal');
+          qrcodeTerminal.generate(qr, { small: true });
+        } catch {}
       } catch (e) {
         console.error('QR Image error:', e);
       }
