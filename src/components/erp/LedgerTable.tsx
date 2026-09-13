@@ -434,7 +434,8 @@ export function LedgerTable({ rows, readOnly, mode, onChanged }: Props) {
                         <input
                           type="date"
                           defaultValue={r.entry_date}
-                          onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)}
+                          onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)}
+                          onBlur={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)}
                           className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                         />
                       )}

@@ -127,7 +127,7 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
                 {!readOnly && <button onClick={() => deleteRow(r)} className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>}
               </div>
               <div className="grid gap-2">
-                <label><span className="text-[10px] uppercase text-muted-foreground">Date</span><input disabled={readOnly} type="date" defaultValue={r.entry_date} onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input" /></label>
+                <label><span className="text-[10px] uppercase text-muted-foreground">Date</span><input disabled={readOnly} type="date" defaultValue={r.entry_date} onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} onBlur={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} className="cell-input" /></label>
                 <label><span className="text-[10px] uppercase text-muted-foreground">Description</span><input disabled={readOnly} defaultValue={r.name} placeholder="Details" onBlur={(e) => e.target.value !== r.name && updateField(r, "name", e.target.value)} className="cell-input" /></label>
                 <label><span className="text-[10px] uppercase text-muted-foreground">Amount</span><input disabled={readOnly} type="number" step="0.01" defaultValue={r.amount} onBlur={(e) => Number(e.target.value) !== Number(r.amount) && updateField(r, "amount", e.target.value)} className="cell-input text-right tabular-nums" /></label>
               </div>
@@ -152,13 +152,14 @@ export function ExpensesTable({ rows, readOnly, onChanged }: Props) {
                 <tr key={r.id} className="border-t hover:bg-muted/20">
                   <td className="px-1 py-1"><input disabled={readOnly} type="number" defaultValue={r.serial_number} onBlur={(e) => Number(e.target.value) !== Number(r.serial_number) && updateField(r, "serial_number", e.target.value)} className="cell-input text-left tabular-nums" /></td>
                   <td className="px-1 py-1">
-                    <div className="relative w-full flex items-center px-2 min-h-[36px]">
-                      <span className="text-xs tabular-nums text-primary font-medium pointer-events-none">{formatDate(r.entry_date)}</span>
+                    <div className="relative w-full flex items-center px-1 min-h-[36px]">
+                      <span className="text-xs tabular-nums text-primary font-bold whitespace-nowrap">{formatDate(r.entry_date)}</span>
                       {!readOnly && (
                         <input 
                           type="date" 
                           defaultValue={r.entry_date} 
-                          onBlur={(e) => e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} 
+                          onChange={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} 
+                          onBlur={(e) => e.target.value && e.target.value !== r.entry_date && updateField(r, "entry_date", e.target.value)} 
                           className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
                         />
                       )}

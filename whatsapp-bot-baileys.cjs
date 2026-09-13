@@ -229,7 +229,7 @@ async function processPhonePeImage(base64Image, mimeType) {
   "paid_to_name": "Recipient name",
   "amount": 1234.00,
   "transaction_id": "Txn ID string",
-  "date": "Date string",
+  "date": "YYYY-MM-DD (Exact payment date on screenshot e.g. 2026-09-10. Convert format like '10 Sep 2026', '10/09/2026', 'Sep 10, 2026' into YYYY-MM-DD. If year is missing, assume 2026)",
   "message": "Payment note/purpose"
 }
 Rules: Return ONLY valid JSON, no markdown. If not PhonePe, set amount null.`;
@@ -846,7 +846,9 @@ async function upsertAuthFile(key, content, retries = 3) {
     if (success) return true;
     if (attempt < retries) await new Promise(r => setTimeout(r, 1000 * attempt));
   }
-  console.error(`❌ upsertAuthFile failed after ${retries} attempts: ${key}`);
+  if (!key.startsWith('pre-key-')) {
+    console.error(`❌ upsertAuthFile failed after ${retries} attempts: ${key}`);
+  }
   return false;
 }
 
@@ -899,6 +901,7 @@ async function loadAllAuthFiles() {
 let _savePending = null;
 
 async function saveSessionToSupabase() {
+  if (!process.env.SYNC_SUPABASE_AUTH) return;
   // Clear any queued save — this replaces it with a fresh one
   if (_savePending) { clearTimeout(_savePending); }
 
@@ -909,7 +912,6 @@ async function saveSessionToSupabase() {
       const credsPath = path.join(AUTH_FOLDER, 'creds.json');
       if (!fs.existsSync(credsPath)) return;
 
-      // Safely read & parse creds.json (handles mid-write 0-byte reads gracefully)
       let credsObj = null;
       try {
         const raw = fs.readFileSync(credsPath, 'utf8');
@@ -917,21 +919,14 @@ async function saveSessionToSupabase() {
           credsObj = JSON.parse(raw);
         }
       } catch (e) {
-        // File was being written — retry in 500ms
-        console.log('⏳ creds.json mid-write detected, retrying save in 500ms...');
         setTimeout(saveSessionToSupabase, 500);
         return;
       }
 
-      // Valid session ONLY if creds.me exists (logged in user object) or bot is LIVE
       const isLoggedIn = Boolean(credsObj?.me || (currentSock && currentSock.authState?.creds?.me) || botStatus === 'LIVE & READY 24/7');
+      if (!isLoggedIn) return;
 
-      if (!isLoggedIn) {
-        console.log('⏭️ Session not logged in yet (no creds.me) — skipping DB save.');
-        return;
-      }
-
-      const fileNames = fs.readdirSync(AUTH_FOLDER);
+      const fileNames = fs.readdirSync(AUTH_FOLDER).filter(f => f === 'creds.json' || f.startsWith('app-state') || f.startsWith('session'));
       const tasks = fileNames
         .filter(f => {
           try { return fs.statSync(path.join(AUTH_FOLDER, f)).isFile(); } catch { return false; }
@@ -944,66 +939,46 @@ async function saveSessionToSupabase() {
         });
 
       await Promise.all(tasks);
-      console.log(`💾 Session saved: ${tasks.length} auth files → Supabase bot_auth_files`);
-    } catch (e) {
-      console.error('Session save error:', e?.message || e);
-    }
-  }, 1000); // 1-second debounce
+    } catch (e) {}
+  }, 1000);
 }
 
 async function restoreSessionFromSupabase() {
+  if (!process.env.SYNC_SUPABASE_AUTH) return false;
   try {
     const rows = await loadAllAuthFiles();
-    if (!Array.isArray(rows) || rows.length < 3) {
-      console.log(`ℹ️ Session files in Supabase incomplete (${rows?.length || 0} files, min 3 needed) — fresh login needed.`);
-      return false;
-    }
+    if (!Array.isArray(rows) || rows.length < 1) return false;
 
-    // Must have creds.json with logged-in user object (creds.me)
     const credsRow = rows.find(r => r.key === 'creds.json');
-    if (!credsRow) {
-      console.log('ℹ️ creds.json not found in Supabase — fresh login needed.');
-      return false;
-    }
+    if (!credsRow) return false;
     try {
       const creds = JSON.parse(credsRow.content);
-      if (!creds?.me) {
-        console.log('⚠️ Supabase creds has no logged-in user (creds.me) — skipping restore for fresh login.');
-        return false;
-      }
+      if (!creds?.me) return false;
     } catch {
-      console.log('⚠️ creds.json is corrupt in Supabase — clearing and starting fresh.');
-      await Promise.all(rows.map(r => deleteAuthFile(r.key)));
       return false;
     }
 
-    // Write all files back to disk
     if (!fs.existsSync(AUTH_FOLDER)) fs.mkdirSync(AUTH_FOLDER, { recursive: true });
     for (const { key, content } of rows) {
       try {
         fs.writeFileSync(path.join(AUTH_FOLDER, key), content, 'utf8');
-      } catch (e) {
-        console.error(`Failed writing auth file ${key}:`, e.message);
-      }
+      } catch (e) {}
     }
-    console.log(`✅ Restored FULL ${rows.length} WhatsApp session files from Supabase!`);
+    console.log(`✅ Restored session files from Supabase!`);
     return true;
   } catch (e) {
-    console.error('Session restore error:', e?.message || e);
     return false;
   }
 }
 
 async function clearSessionFromSupabase() {
+  if (!process.env.SYNC_SUPABASE_AUTH) return;
   try {
     const rows = await loadAllAuthFiles();
     if (Array.isArray(rows) && rows.length > 0) {
       await Promise.all(rows.map(r => deleteAuthFile(r.key)));
-      console.log('🗑️ Cleared all session files from Supabase bot_auth_files.');
     }
-  } catch (e) {
-    console.error('Session clear error:', e?.message || e);
-  }
+  } catch (e) {}
 }
 
 
@@ -1015,6 +990,18 @@ async function startBot() {
   if (currentSock) {
     try { currentSock.ev.removeAllListeners(); currentSock.ws?.close(); } catch {}
     currentSock = null;
+  }
+
+  // If local auth folder has no logged-in user (creds.me), wipe it for a fresh QR Code
+  const credsPath = path.join(AUTH_FOLDER, 'creds.json');
+  if (fs.existsSync(credsPath)) {
+    try {
+      const c = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+      if (!c?.me) {
+        console.log('🧹 Clearing incomplete local auth folder for fresh QR Code...');
+        fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+      }
+    } catch {}
   }
 
   // Restore active login session from Supabase DB before initialization
@@ -1039,27 +1026,11 @@ async function startBot() {
     await saveSessionToSupabase();
   });
 
-  // Request Pairing Code if not registered and no code requested yet
-  if (!sock.authState.creds.registered && !currentPairingCode) {
-    setTimeout(async () => {
-      if (currentPairingCode || sock.authState.creds.registered) return;
-      try {
-        const cleanNumber = PHONE_NUMBER.replace(/[^0-9]/g, '');
-        const code = await sock.requestPairingCode(cleanNumber);
-        currentPairingCode = code;
-        botStatus = `Pairing Code: ${code}`;
-        console.log('\n==================================================');
-        console.log(`🔑 YOUR STABLE WHATSAPP PAIRING CODE IS: ${code}`);
-        console.log(`📱 Phone Number: +${cleanNumber}`);
-        console.log('==================================================');
-        console.log('Open WhatsApp → Settings → Linked Devices → Link with phone number instead → Enter code!\n');
-      } catch (e) {
-        // If code request failed, allow retry on next loop
-        if (!e?.message?.includes('already')) {
-          console.error('Failed to request pairing code:', e?.message || e);
-        }
-      }
-    }, 3000);
+  if (!sock.authState.creds.registered) {
+    console.log('\n==================================================');
+    console.log('📷 WAITING FOR WHATSAPP QR CODE...');
+    console.log('==================================================');
+    console.log('Open WhatsApp on Phone → Settings → Linked Devices → Link a Device ➔ Scan QR Code below:\n');
   }
 
 async function forceSaveSessionToSupabase() {
@@ -1076,7 +1047,7 @@ async function forceSaveSessionToSupabase() {
       } catch {}
     }
 
-    const fileNames = fs.readdirSync(AUTH_FOLDER).filter(f => {
+    const fileNames = fs.readdirSync(AUTH_FOLDER).filter(f => f === 'creds.json' || f.startsWith('app-state') || f.startsWith('session')).filter(f => {
       try { return fs.statSync(path.join(AUTH_FOLDER, f)).isFile(); } catch { return false; }
     });
 
@@ -1208,23 +1179,16 @@ async function forceSaveSessionToSupabase() {
 
         const jid = msg.key.remoteJid;
 
-        // 1. STRICTLY IGNORE ALL DIRECT MESSAGES / PERSONAL CHATS
-        if (!jid.endsWith('@g.us')) continue;
-
-        // 2. STRICTLY IGNORE ALL OTHER GROUPS
-        if (targetGroupJid && jid !== targetGroupJid) continue;
-
-        if (!targetGroupJid) {
-          const subject = await getGroupSubject(jid);
-          if (!subject || subject.trim().toLowerCase() !== TARGET_GROUP.trim().toLowerCase()) {
-            continue; // Not "Bot total raw material"
-          }
-          targetGroupJid = jid;
-          console.log(`🎯 LOCKED TARGET GROUP JID: ${jid} ("${TARGET_GROUP}")`);
-        }
-
         const msgContent = msg.message;
         if (!msgContent) continue;
+
+        const isGroup = jid.endsWith('@g.us');
+        let chatName = isGroup ? 'Group Chat' : 'Direct Chat';
+
+        if (isGroup) {
+          const subject = await getGroupSubject(jid);
+          if (subject) chatName = subject;
+        }
 
         const textContent = extractText(msgContent);
         const BOT_REPLY_PREFIXES = [
@@ -1236,7 +1200,7 @@ async function forceSaveSessionToSupabase() {
           continue;
         }
 
-        console.log(`📩 GROUP MSG ["${TARGET_GROUP}"] | text: "${textContent}" | fromMe: ${msg.key.fromMe}`);
+        console.log(`📩 INCOMING MSG [${chatName}] | text: "${textContent}" | fromMe: ${msg.key.fromMe}`);
 
         // Image PhonePe
         const actualImg = extractImageMessage(msgContent);
@@ -1276,16 +1240,23 @@ async function forceSaveSessionToSupabase() {
           const catLabel = category === 'petrol_diesel' ? '⛽ Petrol/Diesel' : category === 'operator' ? '👷 Operator' : '📦 Other';
           const entryName = data.message ? `${data.paid_to_name} (${data.message})` : data.paid_to_name || 'PhonePe Expense';
 
+          let screenshotDate = today();
+          if (data.date) {
+            const parsed = parseDateInput(data.date);
+            if (parsed) screenshotDate = parsed;
+          }
+
           await supabase('POST', 'expenses', {
-            entry_date: today(),
+            entry_date: screenshotDate,
             name: entryName,
             amount: data.amount,
             category,
             phonepay_txn_id: data.transaction_id || null
           });
 
+          const dateFmt = screenshotDate.split('-').reverse().join('-');
           await sock.sendMessage(jid, {
-            text: `✅ *Expense Added!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${today().split('-').reverse().join('-')}*\n💰 Amount: *${fmtINR(data.amount)}*\n📝 Name: *${entryName}*\n🏷️ Category: *${catLabel}*\n🔖 Txn ID: ${data.transaction_id || 'N/A'}\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete last" likho_`
+            text: `✅ *Expense Added!*\n━━━━━━━━━━━━━━━━━━━━\n📅 Date: *${dateFmt}*\n💰 Amount: *${fmtINR(data.amount)}*\n📝 Name: *${entryName}*\n🏷️ Category: *${catLabel}*\n🔖 Txn ID: ${data.transaction_id || 'N/A'}\n━━━━━━━━━━━━━━━━━━━━\n_Galat tha? "delete last" likho_`
           });
 
         } else if (textContent) {
